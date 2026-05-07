@@ -1,16 +1,10 @@
-const formatarData = (data) => {
-  if (!data) return '-';
-  const [ano, mes, dia] = data.split('-');
-  return `${dia}/${mes}/${ano}`;
-};
-
-const formatarSexo = (sexo) => {
-  if (!sexo) return '-';
-  const mapa = { MASCULINO: 'Masculino', FEMININO: 'Feminino', OUTRO: 'Outro' };
-  return mapa[sexo] ?? sexo;
-};
-
-export default function PacienteList({ pacientes, carregando, onEditar, onExcluir }) {
+export default function PacienteList({
+  pacientes,
+  carregando,
+  onExibir,
+  onEditar,
+  onExcluir,
+}) {
   if (carregando) {
     return <div className="card vazio">Carregando pacientes...</div>;
   }
@@ -31,10 +25,7 @@ export default function PacienteList({ pacientes, carregando, onEditar, onExclui
           <tr>
             <th>Nome</th>
             <th>CPF</th>
-            <th>Nascimento</th>
-            <th>Sexo</th>
             <th>Email</th>
-            <th>Celular</th>
             <th>Ações</th>
           </tr>
         </thead>
@@ -43,12 +34,20 @@ export default function PacienteList({ pacientes, carregando, onEditar, onExclui
             <tr key={p.id}>
               <td>{p.nome}</td>
               <td>{p.cpf}</td>
-              <td>{formatarData(p.dataNascimento)}</td>
-              <td>{formatarSexo(p.sexo)}</td>
               <td>{p.email ?? '-'}</td>
-              <td>{p.telefone ?? '-'}</td>
               <td className="acoes-tabela">
-                <button className="btn btn-icone" onClick={() => onEditar(p)} title="Editar">
+                <button
+                  className="btn btn-icone btn-exibir"
+                  onClick={() => onExibir(p)}
+                  title="Exibir detalhes"
+                >
+                  Exibir
+                </button>
+                <button
+                  className="btn btn-icone"
+                  onClick={() => onEditar(p)}
+                  title="Editar"
+                >
                   Editar
                 </button>
                 <button

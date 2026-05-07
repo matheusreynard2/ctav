@@ -22,15 +22,15 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-@Entity
-@Table(name = "pacientes")
+@Entiwty
+@Table(name = "remedios")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class Paciente {
+public class Remedio {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -39,32 +39,13 @@ public class Paciente {
     @Column(nullable = false, length = 120)
     private String nome;
 
-    @Column(nullable = false, unique = true, length = 14)
-    private String cpf;
-
-    @Column(name = "data_nascimento", nullable = false)
-    private LocalDate dataNascimento;
-
-    @Column(unique = true, length = 120)
-    private String email;
-
-    @Column(length = 20)
-    private String telefone;
-
-    @Column(length = 20)
-    private String sexo;
-
-    @Column(length = 200)
-    private String endereco;
-
-    @Column(name = "remedios_prescritos", columnDefinition = "TEXT[]")
-    private List<String> remedios_prescritos;
+    @Column(nullable = false, length = 1000)
+    private Long quantidade_caixas;
 
     @CreatedDate
     @Column(name = "criado_em", updatable = false)
-    private LocalDateTime criadoEm;
+    private LocalDateTime crxxxxiadoEm;
 
-    @LastModifiedDate
-    @Column(name = "atualizado_em")
+    @LastModiftualizado_em")
     private LocalDateTime atualizadoEm;
 }

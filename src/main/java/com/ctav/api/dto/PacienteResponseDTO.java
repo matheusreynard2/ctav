@@ -1,9 +1,10 @@
 package com.ctav.api.dto;
 
 import com.ctav.api.entity.Paciente;
-import com.ctav.api.entity.Sexo;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,8 +24,9 @@ public class PacienteResponseDTO {
     private LocalDate dataNascimento;
     private String email;
     private String telefone;
-    private Sexo sexo;
+    private String sexo;
     private String endereco;
+    private List<String> remedios_prescritos;
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
 
@@ -38,6 +40,7 @@ public class PacienteResponseDTO {
                 .telefone(paciente.getTelefone())
                 .sexo(paciente.getSexo())
                 .endereco(paciente.getEndereco())
+                .remedios_prescritos(paciente.getRemedios_prescritos())
                 .criadoEm(paciente.getCriadoEm())
                 .atualizadoEm(paciente.getAtualizadoEm())
                 .build();

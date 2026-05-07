@@ -15,10 +15,12 @@ const FORM_INICIAL = {
   telefone: '',
   sexo: '',
   endereco: '',
+  remedios_prescritos: [],
 };
 
 export default function PacienteForm({ pacienteEditando, onSalvar, onCancelar, salvando }) {
   const [form, setForm] = useState(FORM_INICIAL);
+  const [novoRemedio, setNovoRemedio] = useState('');
   const [erros, setErros] = useState({});
 
   useEffect(() => {
@@ -31,10 +33,14 @@ export default function PacienteForm({ pacienteEditando, onSalvar, onCancelar, s
         telefone: maskCelular(pacienteEditando.telefone ?? ''),
         sexo: pacienteEditando.sexo ?? '',
         endereco: pacienteEditando.endereco ?? '',
+        remedios_prescritos: Array.isArray(pacienteEditando.remedios_prescritos)
+          ? [...pacienteEditando.remedios_prescritos]
+          : [],
       });
     } else {
       setForm(FORM_INICIAL);
     }
+    setNovoRemedio('');
     setErros({});
   }, [pacienteEditando]);
 
@@ -47,6 +53,43 @@ export default function PacienteForm({ pacienteEditando, onSalvar, onCancelar, s
     else if (name === 'dataNascimento') novoValor = maskData(value);
 
     setForm((atual) => ({ ...atual, [name]: novoValor }));
+  };
+
+  const adicionarRemedio = () => {
+    const valor = novoRemedio.trim();
+    if (!valor) return;
+
+    const jaExiste = form.remedios_prescritos.some(
+      (r) => r.toLowerCase() === valor.toLowerCase()
+    );
+    if (jaExiste) {
+      setErros((e) => ({ ...e, remedios_prescritos: 'Esse remédio já está na lista' }));
+      return;
+    }
+
+    setForm((atual) => ({
+      ...atual,
+      remedios_prescritos: [...atual.remedios_prescritos, valor],
+    }));
+    setNovoRemedio('');
+    setErros((e) => {
+      const { remedios_prescritos, ...resto } = e;
+      return resto;
+    });
+  };
+
+  const removerRemedio = (indice) => {
+    setForm((atual) => ({
+      ...atual,
+      remedios_prescritos: atual.remedios_prescritos.filter((_, i) => i !== indice),
+    }));
+  };
+
+  const handleRemedioKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      adicionarRemedio();
+    }
   };
 
   const validar = () => {
@@ -93,6 +136,9 @@ export default function PacienteForm({ pacienteEditando, onSalvar, onCancelar, s
       telefone: form.telefone || null,
       sexo: form.sexo || null,
       endereco: form.endereco || null,
+      remedios_prescritos: form.remedios_prescritos.length
+        ? form.remedios_prescritos
+        : null,
     };
     onSalvar(payload);
   };
@@ -189,6 +235,50 @@ export default function PacienteForm({ pacienteEditando, onSalvar, onCancelar, s
             onChange={handleChange}
             placeholder="Rua, número, bairro, cidade"
           />
+        </div>
+
+        <div className="campo campo-largo">
+          <label htmlFor="novoRemedio">Remédios prescritos</label>
+          <div className="remedio-input-wrapper">
+            <input
+              id="novoRemedio"
+              type="text"
+              value={novoRemedio}
+              onChange={(e) => setNovoRemedio(e.target.value)}
+              onKeyDown={handleRemedioKeyDown}
+              placeholder="Digite o nome do remédio e pressione Enter"
+              maxLength={50}
+            />
+            <button
+              type="button"
+              className="btn btn-secundario btn-adicionar-remedio"
+              onClick={adicionarRemedio}
+              disabled={!novoRemedio.trim()}
+            >
+              Adicionar
+            </button>
+          </div>
+          {erros.remedios_prescritos && (
+            <span className="erro">{erros.remedios_prescritos}</span>
+          )}
+          {form.remedios_prescritos.length > 0 && (
+            <ul className="remedios-chips">
+              {form.remedios_prescritos.map((remedio, i) => (
+                <li key={`${remedio}-${i}`} className="remedio-chip">
+                  <span>{remedio}</span>
+                  <button
+                    type="button"
+                    className="remedio-remover"
+                    onClick={() => removerRemedio(i)}
+                    aria-label={`Remover ${remedio}`}
+                    title="Remover"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 

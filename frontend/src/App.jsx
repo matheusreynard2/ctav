@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { pacienteService } from './api';
+import DetalhesPacienteModal from './components/DetalhesPacienteModal.jsx';
 import Header from './components/Header.jsx';
 import ModalConfirmacao from './components/ModalConfirmacao.jsx';
 import PacienteForm from './components/PacienteForm.jsx';
@@ -11,6 +12,7 @@ export default function App() {
   const [carregando, setCarregando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [pacienteEditando, setPacienteEditando] = useState(null);
+  const [pacienteSelecionado, setPacienteSelecionado] = useState(null);
   const [pacienteParaExcluir, setPacienteParaExcluir] = useState(null);
   const [excluindo, setExcluindo] = useState(false);
   const [mensagem, setMensagem] = useState(null);
@@ -70,6 +72,14 @@ export default function App() {
     } finally {
       setSalvando(false);
     }
+  };
+
+  const handleExibir = (paciente) => {
+    setPacienteSelecionado(paciente);
+  };
+
+  const handleFecharDetalhes = () => {
+    setPacienteSelecionado(null);
   };
 
   const handleEditar = (paciente) => {
@@ -223,11 +233,17 @@ export default function App() {
           <PacienteList
             pacientes={pacientes}
             carregando={carregando}
+            onExibir={handleExibir}
             onEditar={handleEditar}
             onExcluir={handleExcluir}
           />
         )}
       </main>
+
+      <DetalhesPacienteModal
+        paciente={pacienteSelecionado}
+        onFechar={handleFecharDetalhes}
+      />
 
       <ModalConfirmacao
         aberto={Boolean(pacienteParaExcluir)}

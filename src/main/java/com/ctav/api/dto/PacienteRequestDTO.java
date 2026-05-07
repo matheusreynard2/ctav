@@ -1,6 +1,5 @@
 package com.ctav.api.dto;
 
-import com.ctav.api.entity.Sexo;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -8,6 +7,8 @@ import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -43,8 +44,11 @@ public class PacienteRequestDTO {
     @Size(max = 20)
     private String telefone;
 
-    private Sexo sexo;
+    private String sexo;
 
     @Size(max = 200)
     private String endereco;
+
+    @Size(max = 50)
+    private List<String> remedios_prescritos;
 }

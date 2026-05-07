@@ -29,6 +29,7 @@ public class PacienteService {
                 .telefone(dto.getTelefone())
                 .sexo(dto.getSexo())
                 .endereco(dto.getEndereco())
+                .remedios_prescritos(dto.getRemedios_prescritos())
                 .build();
 
         Paciente salvo = pacienteRepository.save(paciente);
@@ -59,8 +60,8 @@ public class PacienteService {
         paciente.setEmail(dto.getEmail());
         paciente.setTelefone(dto.getTelefone());
         paciente.setSexo(dto.getSexo());
-        paciente.setEndereco(dto.getEndereco());
-
+        paciente.setEndereco(dto.getEndereco());    
+        paciente.setRemedios_prescritos(dto.getRemedios_prescritos());
         return PacienteResponseDTO.fromEntity(pacienteRepository.save(paciente));
     }
 
