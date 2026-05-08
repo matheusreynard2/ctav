@@ -26,11 +26,17 @@ public class PacienteResponseDTO {
     private String telefone;
     private String sexo;
     private String endereco;
-    private List<String> remedios_prescritos;
+    private List<RemedioResponseDTO> remedios_prescritos;
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
 
     public static PacienteResponseDTO fromEntity(Paciente paciente) {
+        List<RemedioResponseDTO> remedios = paciente.getRemedios_prescritos() == null
+                ? List.of()
+                : paciente.getRemedios_prescritos().stream()
+                        .map(RemedioResponseDTO::fromEntity)
+                        .toList();
+
         return PacienteResponseDTO.builder()
                 .id(paciente.getId())
                 .nome(paciente.getNome())
@@ -40,7 +46,7 @@ public class PacienteResponseDTO {
                 .telefone(paciente.getTelefone())
                 .sexo(paciente.getSexo())
                 .endereco(paciente.getEndereco())
-                .remedios_prescritos(paciente.getRemedios_prescritos())
+                .remedios_prescritos(remedios)
                 .criadoEm(paciente.getCriadoEm())
                 .atualizadoEm(paciente.getAtualizadoEm())
                 .build();

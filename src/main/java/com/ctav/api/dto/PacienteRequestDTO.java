@@ -49,6 +49,5 @@ public class PacienteRequestDTO {
     @Size(max = 200)
     private String endereco;
 
-    @Size(max = 50)
-    private List<String> remedios_prescritos;
+    private List<Long> remedios_prescritos_ids;
 }

@@ -3,10 +3,17 @@ package com.ctav.api.service;
 import com.ctav.api.dto.PacienteRequestDTO;
 import com.ctav.api.dto.PacienteResponseDTO;
 import com.ctav.api.entity.Paciente;
+import com.ctav.api.entity.Remedio;
 import com.ctav.api.exception.BusinessException;
 import com.ctav.api.exception.ResourceNotFoundException;
 import com.ctav.api.repository.PacienteRepository;
+import com.ctav.api.repository.RemedioRepository;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PacienteService {
 
     private final PacienteRepository pacienteRepository;
+    private final RemedioRepository remedioRepository;
 
     @Transactional
     public PacienteResponseDTO criar(PacienteRequestDTO dto) {
@@ -29,7 +37,7 @@ public class PacienteService {
                 .telefone(dto.getTelefone())
                 .sexo(dto.getSexo())
                 .endereco(dto.getEndereco())
-                .remedios_prescritos(dto.getRemedios_prescritos())
+                .remedios_prescritos(buscarRemediosPorIds(dto.getRemedios_prescritos_ids()))
                 .build();
 
         Paciente salvo = pacienteRepository.save(paciente);
@@ -60,8 +68,8 @@ public class PacienteService {
         paciente.setEmail(dto.getEmail());
         paciente.setTelefone(dto.getTelefone());
         paciente.setSexo(dto.getSexo());
-        paciente.setEndereco(dto.getEndereco());    
-        paciente.setRemedios_prescritos(dto.getRemedios_prescritos());
+        paciente.setEndereco(dto.getEndereco());
+        paciente.setRemedios_prescritos(buscarRemediosPorIds(dto.getRemedios_prescritos_ids()));
         return PacienteResponseDTO.fromEntity(pacienteRepository.save(paciente));
     }
 
@@ -75,6 +83,28 @@ public class PacienteService {
         return pacienteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Paciente não encontrado com o id: " + id));
+    }
+
+    private List<Remedio> buscarRemediosPorIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<Long> idsUnicos = ids.stream().distinct().toList();
+        List<Remedio> encontrados = remedioRepository.findAllById(idsUnicos);
+
+        if (encontrados.size() != idsUnicos.size()) {
+            Set<Long> idsEncontrados = encontrados.stream()
+                    .map(Remedio::getId)
+                    .collect(Collectors.toCollection(HashSet::new));
+            List<Long> idsFaltando = idsUnicos.stream()
+                    .filter(id -> !idsEncontrados.contains(id))
+                    .toList();
+            throw new ResourceNotFoundException(
+                    "Remédio(s) não encontrado(s) com os ids: " + idsFaltando);
+        }
+
+        return new ArrayList<>(encontrados);
     }
 
     private void validarUnicidade(String cpf, String email, Long idAtual) {

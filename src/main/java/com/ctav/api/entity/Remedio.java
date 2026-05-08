@@ -22,7 +22,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-@Entiwty
+@Entity
 @Table(name = "remedios")
 @Getter
 @Setter
@@ -39,13 +39,14 @@ public class Remedio {
     @Column(nullable = false, length = 120)
     private String nome;
 
-    @Column(nullable = false, length = 1000)
-    private Long quantidade_caixas;
+    @Column(nullable = false)
+    private Integer quantidade_caixas;
 
     @CreatedDate
     @Column(name = "criado_em", updatable = false)
-    private LocalDateTime crxxxxiadoEm;
+    private LocalDateTime criadoEm;
 
-    @LastModiftualizado_em")
+    @LastModifiedDate
+    @Column(name = "atualizado_em")
     private LocalDateTime atualizadoEm;
 }

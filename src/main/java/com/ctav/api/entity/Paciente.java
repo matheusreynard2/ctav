@@ -3,14 +3,17 @@ package com.ctav.api.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import lombok.AllArgsConstructor;
@@ -57,8 +60,14 @@ public class Paciente {
     @Column(length = 200)
     private String endereco;
 
-    @Column(name = "remedios_prescritos", columnDefinition = "TEXT[]")
-    private List<String> remedios_prescritos;
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "paciente_remedio",
+            joinColumns = @JoinColumn(name = "paciente_id"),
+            inverseJoinColumns = @JoinColumn(name = "remedio_id")
+    )
+    @Builder.Default
+    private List<Remedio> remedios_prescritos = new ArrayList<>();
 
     @CreatedDate
     @Column(name = "criado_em", updatable = false)
