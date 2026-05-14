@@ -22,6 +22,8 @@ public class AcolhidoResponseDTO {
     private String nome;
     private String cpf;
     private LocalDate dataNascimento;
+    private LocalDate dataAcolhimentoCtav;
+    private LocalDate dataSaidaCtav;
     private String email;
     private String telefone;
     private String sexo;
@@ -42,6 +44,8 @@ public class AcolhidoResponseDTO {
                 .nome(acolhido.getNome())
                 .cpf(acolhido.getCpf())
                 .dataNascimento(acolhido.getDataNascimento())
+                .dataAcolhimentoCtav(acolhido.getDataAcolhimentoCtav())
+                .dataSaidaCtav(acolhido.getDataSaidaCtav())
                 .email(acolhido.getEmail())
                 .telefone(acolhido.getTelefone())
                 .sexo(acolhido.getSexo())

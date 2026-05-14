@@ -84,6 +84,20 @@ export default function DetalhesAcolhidoModal({ acolhido, onFechar }) {
         </section>
 
         <section className="detalhes-secao">
+          <h4 className="detalhes-secao-titulo">Instituição CTAV</h4>
+          <div className="detalhes-grid">
+            <Campo
+              label="Data de acolhimento (entrada)"
+              valor={formatarData(acolhido.dataAcolhimentoCtav)}
+            />
+            <Campo
+              label="Data de saída / alta"
+              valor={formatarData(acolhido.dataSaidaCtav)}
+            />
+          </div>
+        </section>
+
+        <section className="detalhes-secao">
           <h4 className="detalhes-secao-titulo">Contato</h4>
           <div className="detalhes-grid">
             <Campo label="Email" valor={acolhido.email} />

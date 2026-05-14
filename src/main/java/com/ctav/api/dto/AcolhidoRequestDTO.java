@@ -37,6 +37,11 @@ public class AcolhidoRequestDTO {
     @Past(message = "A data de nascimento deve estar no passado")
     private LocalDate dataNascimento;
 
+    @NotNull(message = "A data de acolhimento na CTAV é obrigatória")
+    private LocalDate dataAcolhimentoCtav;
+
+    private LocalDate dataSaidaCtav;
+
     @Email(message = "Email inválido")
     @Size(max = 120)
     private String email;

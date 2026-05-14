@@ -48,6 +48,12 @@ public class Acolhido {
     @Column(name = "data_nascimento", nullable = false)
     private LocalDate dataNascimento;
 
+    @Column(name = "data_acolhimento_ctav", nullable = false)
+    private LocalDate dataAcolhimentoCtav;
+
+    @Column(name = "data_saida_ctav", nullable = true)
+    private LocalDate dataSaidaCtav;
+
     @Column(unique = true, length = 120)
     private String email;
 

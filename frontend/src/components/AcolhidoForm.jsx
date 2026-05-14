@@ -11,10 +11,20 @@ const FORM_INICIAL = {
   nome: '',
   cpf: '',
   dataNascimento: '',
+  dataAcolhimentoCtav: '',
+  dataSaidaCtav: '',
   email: '',
   telefone: '',
   sexo: '',
   endereco: '',
+};
+
+const hojeComoIso = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dia}`;
 };
 
 const truncarDescricaoRemedio = (texto, max = 72) => {
@@ -43,6 +53,8 @@ export default function AcolhidoForm({
         nome: acolhidoEditando.nome ?? '',
         cpf: maskCpf(acolhidoEditando.cpf ?? ''),
         dataNascimento: isoParaData(acolhidoEditando.dataNascimento),
+        dataAcolhimentoCtav: isoParaData(acolhidoEditando.dataAcolhimentoCtav),
+        dataSaidaCtav: isoParaData(acolhidoEditando.dataSaidaCtav),
         email: acolhidoEditando.email ?? '',
         telefone: maskCelular(acolhidoEditando.telefone ?? ''),
         sexo: acolhidoEditando.sexo ?? '',
@@ -89,7 +101,12 @@ export default function AcolhidoForm({
 
     if (name === 'cpf') novoValor = maskCpf(value);
     else if (name === 'telefone') novoValor = maskCelular(value);
-    else if (name === 'dataNascimento') novoValor = maskData(value);
+    else if (
+      name === 'dataNascimento' ||
+      name === 'dataAcolhimentoCtav' ||
+      name === 'dataSaidaCtav'
+    )
+      novoValor = maskData(value);
 
     setForm((atual) => ({ ...atual, [name]: novoValor }));
   };
@@ -131,6 +148,29 @@ export default function AcolhidoForm({
       }
     }
 
+    const hoje = hojeComoIso();
+    if (!form.dataAcolhimentoCtav.trim()) {
+      novosErros.dataAcolhimentoCtav = 'Informe a data de acolhimento na CTAV';
+    } else {
+      const isoAcolhimento = dataParaIso(form.dataAcolhimentoCtav);
+      if (!isoAcolhimento) {
+        novosErros.dataAcolhimentoCtav = 'Data inválida';
+      } else if (isoAcolhimento > hoje) {
+        novosErros.dataAcolhimentoCtav =
+          'A data não pode ser posterior à data atual';
+      }
+    }
+
+    if (form.dataSaidaCtav.trim()) {
+      const isoSaida = dataParaIso(form.dataSaidaCtav);
+      if (!isoSaida) {
+        novosErros.dataSaidaCtav = 'Data inválida';
+      } else if (isoSaida > hoje) {
+        novosErros.dataSaidaCtav =
+          'A data não pode ser posterior à data atual';
+      }
+    }
+
     const telDigitos = form.telefone.replace(/\D/g, '');
     if (telDigitos && telDigitos.length !== 11) {
       novosErros.telefone = 'Celular deve ter DDD + 9 dígitos';
@@ -148,6 +188,10 @@ export default function AcolhidoForm({
       nome: form.nome.trim(),
       cpf: form.cpf,
       dataNascimento: dataParaIso(form.dataNascimento),
+      dataAcolhimentoCtav: dataParaIso(form.dataAcolhimentoCtav),
+      dataSaidaCtav: form.dataSaidaCtav.trim()
+        ? dataParaIso(form.dataSaidaCtav)
+        : null,
       email: form.email || null,
       telefone: form.telefone || null,
       sexo: form.sexo || null,
@@ -204,6 +248,40 @@ export default function AcolhidoForm({
             maxLength={10}
           />
           {erros.dataNascimento && <span className="erro">{erros.dataNascimento}</span>}
+        </div>
+
+        <div className="campo">
+          <label htmlFor="dataAcolhimentoCtav" title="Data em que o acolhido entra na instituição">
+            Data de acolhimento na CTAV *
+          </label>
+          <input
+            id="dataAcolhimentoCtav"
+            name="dataAcolhimentoCtav"
+            value={form.dataAcolhimentoCtav}
+            onChange={handleChange}
+            placeholder="dd/mm/aaaa"
+            inputMode="numeric"
+            maxLength={10}
+          />
+          {erros.dataAcolhimentoCtav && (
+            <span className="erro">{erros.dataAcolhimentoCtav}</span>
+          )}
+        </div>
+
+        <div className="campo">
+          <label htmlFor="dataSaidaCtav" title="Data em que o acolhido sai ou recebe alta da instituição">
+            Data de saída / alta na CTAV
+          </label>
+          <input
+            id="dataSaidaCtav"
+            name="dataSaidaCtav"
+            value={form.dataSaidaCtav}
+            onChange={handleChange}
+            placeholder="dd/mm/aaaa (opcional)"
+            inputMode="numeric"
+            maxLength={10}
+          />
+          {erros.dataSaidaCtav && <span className="erro">{erros.dataSaidaCtav}</span>}
         </div>
 
         <div className="campo">

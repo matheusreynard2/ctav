@@ -33,6 +33,8 @@ public class AcolhidoService {
                 .nome(dto.getNome())
                 .cpf(dto.getCpf())
                 .dataNascimento(dto.getDataNascimento())
+                .dataAcolhimentoCtav(dto.getDataAcolhimentoCtav())
+                .dataSaidaCtav(dto.getDataSaidaCtav())
                 .email(dto.getEmail())
                 .telefone(dto.getTelefone())
                 .sexo(dto.getSexo())
@@ -65,6 +67,8 @@ public class AcolhidoService {
         acolhido.setNome(dto.getNome());
         acolhido.setCpf(dto.getCpf());
         acolhido.setDataNascimento(dto.getDataNascimento());
+        acolhido.setDataAcolhimentoCtav(dto.getDataAcolhimentoCtav());
+        acolhido.setDataSaidaCtav(dto.getDataSaidaCtav());
         acolhido.setEmail(dto.getEmail());
         acolhido.setTelefone(dto.getTelefone());
         acolhido.setSexo(dto.getSexo());
