@@ -1,18 +1,13 @@
 package com.ctav.api.service;
 
-import com.ctav.api.dto.PacienteRequestDTO;
-import com.ctav.api.dto.PacienteResponseDTO;
 import com.ctav.api.dto.RemedioRequestDTO;
 import com.ctav.api.dto.RemedioResponseDTO;
-import com.ctav.api.entity.Paciente;
 import com.ctav.api.entity.Remedio;
 import com.ctav.api.exception.BusinessException;
 import com.ctav.api.exception.ResourceNotFoundException;
-import com.ctav.api.repository.PacienteRepository;
 import com.ctav.api.repository.RemedioRepository;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +25,7 @@ public class RemedioService {
 
         Remedio remedio = Remedio.builder()
                 .nome(dto.getNome())
+                .descricao(dto.getDescricao())
                 .quantidade_caixas(dto.getQuantidade_caixas()).build();
 
         Remedio salvo = remedioRepository.save(remedio);
@@ -54,6 +50,7 @@ public class RemedioService {
         Remedio remedio = buscarEntidadePorId(id);
         validarUnicidade(dto.getNome(), id);
         remedio.setNome(dto.getNome());
+        remedio.setDescricao(dto.getDescricao());
         remedio.setQuantidade_caixas(dto.getQuantidade_caixas());
         return RemedioResponseDTO.fromEntity(remedioRepository.save(remedio));   
     }

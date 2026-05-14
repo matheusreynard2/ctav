@@ -32,20 +32,20 @@ const Campo = ({ label, valor, largo = false }) => (
   </div>
 );
 
-export default function DetalhesPacienteModal({ paciente, onFechar }) {
+export default function DetalhesAcolhidoModal({ acolhido, onFechar }) {
   useEffect(() => {
-    if (!paciente) return;
+    if (!acolhido) return;
     const handleEsc = (e) => {
       if (e.key === 'Escape') onFechar();
     };
     document.addEventListener('keydown', handleEsc);
     return () => document.removeEventListener('keydown', handleEsc);
-  }, [paciente, onFechar]);
+  }, [acolhido, onFechar]);
 
-  if (!paciente) return null;
+  if (!acolhido) return null;
 
-  const remedios = Array.isArray(paciente.remedios_prescritos)
-    ? paciente.remedios_prescritos
+  const remedios = Array.isArray(acolhido.remedios_prescritos)
+    ? acolhido.remedios_prescritos
     : [];
 
   return (
@@ -61,8 +61,8 @@ export default function DetalhesPacienteModal({ paciente, onFechar }) {
       >
         <div className="detalhes-cabecalho">
           <div>
-            <span className="detalhes-eyebrow">Paciente</span>
-            <h3 className="modal-titulo detalhes-nome">{paciente.nome}</h3>
+            <span className="detalhes-eyebrow">Acolhido</span>
+            <h3 className="modal-titulo detalhes-nome">{acolhido.nome}</h3>
           </div>
           <button
             type="button"
@@ -77,18 +77,18 @@ export default function DetalhesPacienteModal({ paciente, onFechar }) {
         <section className="detalhes-secao">
           <h4 className="detalhes-secao-titulo">Dados pessoais</h4>
           <div className="detalhes-grid">
-            <Campo label="CPF" valor={paciente.cpf} />
-            <Campo label="Data de nascimento" valor={formatarData(paciente.dataNascimento)} />
-            <Campo label="Sexo" valor={formatarSexo(paciente.sexo)} />
+            <Campo label="CPF" valor={acolhido.cpf} />
+            <Campo label="Data de nascimento" valor={formatarData(acolhido.dataNascimento)} />
+            <Campo label="Sexo" valor={formatarSexo(acolhido.sexo)} />
           </div>
         </section>
 
         <section className="detalhes-secao">
           <h4 className="detalhes-secao-titulo">Contato</h4>
           <div className="detalhes-grid">
-            <Campo label="Email" valor={paciente.email} />
-            <Campo label="Celular" valor={paciente.telefone} />
-            <Campo label="Endereço" valor={paciente.endereco} largo />
+            <Campo label="Email" valor={acolhido.email} />
+            <Campo label="Celular" valor={acolhido.telefone} />
+            <Campo label="Endereço" valor={acolhido.endereco} largo />
           </div>
         </section>
 
@@ -96,9 +96,20 @@ export default function DetalhesPacienteModal({ paciente, onFechar }) {
           <h4 className="detalhes-secao-titulo">Remédios prescritos</h4>
           {remedios.length > 0 ? (
             <ul className="detalhes-remedios">
-              {remedios.map((r, i) => (
-                <li key={`${r}-${i}`}>{r}</li>
-              ))}
+              {remedios.map((r, i) => {
+                const nome = typeof r === 'object' ? r?.nome ?? '-' : r;
+                const desc =
+                  typeof r === 'object' && r?.descricao ? String(r.descricao).trim() : '';
+                const chave = typeof r === 'object' ? r?.id ?? `${nome}-${i}` : `${r}-${i}`;
+                return (
+                  <li key={chave}>
+                    <span className="detalhes-remedio-nome">{nome}</span>
+                    {desc ? (
+                      <span className="detalhes-remedio-descricao">{desc}</span>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p className="detalhes-vazio">Nenhum remédio prescrito.</p>
@@ -106,8 +117,8 @@ export default function DetalhesPacienteModal({ paciente, onFechar }) {
         </section>
 
         <section className="detalhes-secao detalhes-auditoria">
-          <Campo label="Cadastrado em" valor={formatarDataHora(paciente.criadoEm)} />
-          <Campo label="Última atualização" valor={formatarDataHora(paciente.atualizadoEm)} />
+          <Campo label="Cadastrado em" valor={formatarDataHora(acolhido.criadoEm)} />
+          <Campo label="Última atualização" valor={formatarDataHora(acolhido.atualizadoEm)} />
         </section>
 
         <div className="modal-acoes detalhes-acoes">

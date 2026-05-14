@@ -18,6 +18,7 @@ public class RemedioResponseDTO {
 
     private Long id;
     private String nome;
+    private String descricao;
     private Integer quantidade_caixas;
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
@@ -26,6 +27,7 @@ public class RemedioResponseDTO {
         return RemedioResponseDTO.builder()
                 .id(remedio.getId())
                 .nome(remedio.getNome())
+                .descricao(remedio.getDescricao())
                 .quantidade_caixas(remedio.getQuantidade_caixas())
                 .criadoEm(remedio.getCriadoEm())
                 .atualizadoEm(remedio.getAtualizadoEm())

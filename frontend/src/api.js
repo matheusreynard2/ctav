@@ -7,12 +7,20 @@ const api = axios.create({
   },
 });
 
-export const pacienteService = {
-  listar: () => api.get('/pacientes').then((r) => r.data),
-  buscarPorId: (id) => api.get(`/pacientes/${id}`).then((r) => r.data),
-  criar: (dados) => api.post('/pacientes', dados).then((r) => r.data),
-  atualizar: (id, dados) => api.put(`/pacientes/${id}`, dados).then((r) => r.data),
-  deletar: (id) => api.delete(`/pacientes/${id}`),
+export const acolhidoService = {
+  listar: () => api.get('/acolhidos').then((r) => r.data),
+  buscarPorId: (id) => api.get(`/acolhidos/${id}`).then((r) => r.data),
+  criar: (dados) => api.post('/acolhidos', dados).then((r) => r.data),
+  atualizar: (id, dados) => api.put(`/acolhidos/${id}`, dados).then((r) => r.data),
+  deletar: (id) => api.delete(`/acolhidos/${id}`),
+};
+
+export const remedioService = {
+  listar: () => api.get('/remedios').then((r) => r.data),
+  buscarPorId: (id) => api.get(`/remedios/${id}`).then((r) => r.data),
+  criar: (dados) => api.post('/remedios', dados).then((r) => r.data),
+  atualizar: (id, dados) => api.put(`/remedios/${id}`, dados).then((r) => r.data),
+  deletar: (id) => api.delete(`/remedios/${id}`),
 };
 
 export default api;

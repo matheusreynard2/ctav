@@ -1,12 +1,12 @@
 package com.ctav.api.service;
 
-import com.ctav.api.dto.PacienteRequestDTO;
-import com.ctav.api.dto.PacienteResponseDTO;
-import com.ctav.api.entity.Paciente;
+import com.ctav.api.dto.AcolhidoRequestDTO;
+import com.ctav.api.dto.AcolhidoResponseDTO;
+import com.ctav.api.entity.Acolhido;
 import com.ctav.api.entity.Remedio;
 import com.ctav.api.exception.BusinessException;
 import com.ctav.api.exception.ResourceNotFoundException;
-import com.ctav.api.repository.PacienteRepository;
+import com.ctav.api.repository.AcolhidoRepository;
 import com.ctav.api.repository.RemedioRepository;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -20,16 +20,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class PacienteService {
+public class AcolhidoService {
 
-    private final PacienteRepository pacienteRepository;
+    private final AcolhidoRepository acolhidoRepository;
     private final RemedioRepository remedioRepository;
 
     @Transactional
-    public PacienteResponseDTO criar(PacienteRequestDTO dto) {
+    public AcolhidoResponseDTO criar(AcolhidoRequestDTO dto) {
         validarUnicidade(dto.getCpf(), dto.getEmail(), null);
 
-        Paciente paciente = Paciente.builder()
+        Acolhido acolhido = Acolhido.builder()
                 .nome(dto.getNome())
                 .cpf(dto.getCpf())
                 .dataNascimento(dto.getDataNascimento())
@@ -40,49 +40,49 @@ public class PacienteService {
                 .remedios_prescritos(buscarRemediosPorIds(dto.getRemedios_prescritos_ids()))
                 .build();
 
-        Paciente salvo = pacienteRepository.save(paciente);
-        return PacienteResponseDTO.fromEntity(salvo);
+        Acolhido salvo = acolhidoRepository.save(acolhido);
+        return AcolhidoResponseDTO.fromEntity(salvo);
     }
 
     @Transactional(readOnly = true)
-    public List<PacienteResponseDTO> listar() {
-        return pacienteRepository.findAll()
+    public List<AcolhidoResponseDTO> listar() {
+        return acolhidoRepository.findAll()
                 .stream()
-                .map(PacienteResponseDTO::fromEntity)
+                .map(AcolhidoResponseDTO::fromEntity)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public PacienteResponseDTO buscarPorId(Long id) {
-        return PacienteResponseDTO.fromEntity(buscarEntidadePorId(id));
+    public AcolhidoResponseDTO buscarPorId(Long id) {
+        return AcolhidoResponseDTO.fromEntity(buscarEntidadePorId(id));
     }
 
     @Transactional
-    public PacienteResponseDTO atualizar(Long id, PacienteRequestDTO dto) {
-        Paciente paciente = buscarEntidadePorId(id);
+    public AcolhidoResponseDTO atualizar(Long id, AcolhidoRequestDTO dto) {
+        Acolhido acolhido = buscarEntidadePorId(id);
         validarUnicidade(dto.getCpf(), dto.getEmail(), id);
 
-        paciente.setNome(dto.getNome());
-        paciente.setCpf(dto.getCpf());
-        paciente.setDataNascimento(dto.getDataNascimento());
-        paciente.setEmail(dto.getEmail());
-        paciente.setTelefone(dto.getTelefone());
-        paciente.setSexo(dto.getSexo());
-        paciente.setEndereco(dto.getEndereco());
-        paciente.setRemedios_prescritos(buscarRemediosPorIds(dto.getRemedios_prescritos_ids()));
-        return PacienteResponseDTO.fromEntity(pacienteRepository.save(paciente));
+        acolhido.setNome(dto.getNome());
+        acolhido.setCpf(dto.getCpf());
+        acolhido.setDataNascimento(dto.getDataNascimento());
+        acolhido.setEmail(dto.getEmail());
+        acolhido.setTelefone(dto.getTelefone());
+        acolhido.setSexo(dto.getSexo());
+        acolhido.setEndereco(dto.getEndereco());
+        acolhido.setRemedios_prescritos(buscarRemediosPorIds(dto.getRemedios_prescritos_ids()));
+        return AcolhidoResponseDTO.fromEntity(acolhidoRepository.save(acolhido));
     }
 
     @Transactional
     public void deletar(Long id) {
-        Paciente paciente = buscarEntidadePorId(id);
-        pacienteRepository.delete(paciente);
+        Acolhido acolhido = buscarEntidadePorId(id);
+        acolhidoRepository.delete(acolhido);
     }
 
-    private Paciente buscarEntidadePorId(Long id) {
-        return pacienteRepository.findById(id)
+    private Acolhido buscarEntidadePorId(Long id) {
+        return acolhidoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Paciente não encontrado com o id: " + id));
+                        "Acolhido não encontrado com o id: " + id));
     }
 
     private List<Remedio> buscarRemediosPorIds(List<Long> ids) {
@@ -98,7 +98,7 @@ public class PacienteService {
                     .map(Remedio::getId)
                     .collect(Collectors.toCollection(HashSet::new));
             List<Long> idsFaltando = idsUnicos.stream()
-                    .filter(id -> !idsEncontrados.contains(id))
+                    .filter(oid -> !idsEncontrados.contains(oid))
                     .toList();
             throw new ResourceNotFoundException(
                     "Remédio(s) não encontrado(s) com os ids: " + idsFaltando);
@@ -108,16 +108,16 @@ public class PacienteService {
     }
 
     private void validarUnicidade(String cpf, String email, Long idAtual) {
-        pacienteRepository.findByCpf(cpf).ifPresent(p -> {
+        acolhidoRepository.findByCpf(cpf).ifPresent(p -> {
             if (idAtual == null || !p.getId().equals(idAtual)) {
-                throw new BusinessException("Já existe um paciente cadastrado com este CPF");
+                throw new BusinessException("Já existe um acolhido cadastrado com este CPF");
             }
         });
 
         if (email != null && !email.isBlank()) {
-            pacienteRepository.findByEmail(email).ifPresent(p -> {
+            acolhidoRepository.findByEmail(email).ifPresent(p -> {
                 if (idAtual == null || !p.getId().equals(idAtual)) {
-                    throw new BusinessException("Já existe um paciente cadastrado com este email");
+                    throw new BusinessException("Já existe um acolhido cadastrado com este email");
                 }
             });
         }

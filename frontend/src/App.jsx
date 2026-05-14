@@ -1,20 +1,31 @@
 import { useEffect, useState } from 'react';
-import { pacienteService } from './api';
-import DetalhesPacienteModal from './components/DetalhesPacienteModal.jsx';
+import { acolhidoService, remedioService } from './api';
+import DetalhesAcolhidoModal from './components/DetalhesAcolhidoModal.jsx';
 import Header from './components/Header.jsx';
 import ModalConfirmacao from './components/ModalConfirmacao.jsx';
-import PacienteForm from './components/PacienteForm.jsx';
-import PacienteList from './components/PacienteList.jsx';
+import AcolhidoForm from './components/AcolhidoForm.jsx';
+import AcolhidoList from './components/AcolhidoList.jsx';
+import RemedioForm from './components/RemedioForm.jsx';
+import RemedioList from './components/RemedioList.jsx';
 
 export default function App() {
   const [pagina, setPagina] = useState('inicio');
-  const [pacientes, setPacientes] = useState([]);
-  const [carregando, setCarregando] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [pacienteEditando, setPacienteEditando] = useState(null);
-  const [pacienteSelecionado, setPacienteSelecionado] = useState(null);
-  const [pacienteParaExcluir, setPacienteParaExcluir] = useState(null);
-  const [excluindo, setExcluindo] = useState(false);
+
+  const [acolhidos, setAcolhidos] = useState([]);
+  const [carregandoAcolhidos, setCarregandoAcolhidos] = useState(false);
+  const [salvandoAcolhido, setSalvandoAcolhido] = useState(false);
+  const [acolhidoEditando, setAcolhidoEditando] = useState(null);
+  const [acolhidoSelecionado, setAcolhidoSelecionado] = useState(null);
+  const [acolhidoParaExcluir, setAcolhidoParaExcluir] = useState(null);
+  const [excluindoAcolhido, setExcluindoAcolhido] = useState(false);
+
+  const [remedios, setRemedios] = useState([]);
+  const [carregandoRemedios, setCarregandoRemedios] = useState(false);
+  const [salvandoRemedio, setSalvandoRemedio] = useState(false);
+  const [remedioEditando, setRemedioEditando] = useState(null);
+  const [remedioParaExcluir, setRemedioParaExcluir] = useState(null);
+  const [excluindoRemedio, setExcluindoRemedio] = useState(false);
+
   const [mensagem, setMensagem] = useState(null);
 
   const mostrarMensagem = (tipo, texto) => {
@@ -33,97 +44,168 @@ export default function App() {
     return padrao;
   };
 
-  const carregarPacientes = async () => {
-    setCarregando(true);
+  const carregarAcolhidos = async () => {
+    setCarregandoAcolhidos(true);
     try {
-      const dados = await pacienteService.listar();
-      setPacientes(dados);
+      const dados = await acolhidoService.listar();
+      setAcolhidos(dados);
     } catch (err) {
-      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar pacientes.'));
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar acolhidos.'));
     } finally {
-      setCarregando(false);
+      setCarregandoAcolhidos(false);
+    }
+  };
+
+  const carregarRemedios = async () => {
+    setCarregandoRemedios(true);
+    try {
+      const dados = await remedioService.listar();
+      setRemedios(dados);
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar remédios.'));
+    } finally {
+      setCarregandoRemedios(false);
     }
   };
 
   useEffect(() => {
-    carregarPacientes();
+    carregarAcolhidos();
+    carregarRemedios();
   }, []);
 
   const handleNavegar = (novaPagina) => {
     setPagina(novaPagina);
-    setPacienteEditando(null);
+    setAcolhidoEditando(null);
+    setRemedioEditando(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSalvar = async (dados) => {
-    setSalvando(true);
+  const handleSalvarAcolhido = async (dados) => {
+    setSalvandoAcolhido(true);
     try {
-      if (pacienteEditando) {
-        await pacienteService.atualizar(pacienteEditando.id, dados);
-        mostrarMensagem('sucesso', 'Paciente atualizado com sucesso.');
+      if (acolhidoEditando) {
+        await acolhidoService.atualizar(acolhidoEditando.id, dados);
+        mostrarMensagem('sucesso', 'Acolhido atualizado com sucesso.');
       } else {
-        await pacienteService.criar(dados);
-        mostrarMensagem('sucesso', 'Paciente cadastrado com sucesso.');
+        await acolhidoService.criar(dados);
+        mostrarMensagem('sucesso', 'Acolhido cadastrado com sucesso.');
       }
-      setPacienteEditando(null);
-      await carregarPacientes();
+      setAcolhidoEditando(null);
+      await carregarAcolhidos();
     } catch (err) {
-      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar paciente.'));
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar acolhido.'));
     } finally {
-      setSalvando(false);
+      setSalvandoAcolhido(false);
     }
   };
 
-  const handleExibir = (paciente) => {
-    setPacienteSelecionado(paciente);
+  const handleExibirAcolhido = (acolhido) => {
+    setAcolhidoSelecionado(acolhido);
   };
 
-  const handleFecharDetalhes = () => {
-    setPacienteSelecionado(null);
+  const handleFecharDetalhesAcolhido = () => {
+    setAcolhidoSelecionado(null);
   };
 
-  const handleEditar = (paciente) => {
-    setPacienteEditando(paciente);
-    if (pagina === 'pacientes') {
-      setPagina('cadastro');
-    }
+  const handleEditarAcolhido = (acolhido) => {
+    setAcolhidoEditando(acolhido);
+    setPagina('cadastro-acolhido');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleCancelar = () => {
-    setPacienteEditando(null);
+  const handleCancelarEdicaoAcolhido = () => {
+    setAcolhidoEditando(null);
   };
 
-  const handleExcluir = (paciente) => {
-    setPacienteParaExcluir(paciente);
+  const handleExcluirAcolhido = (acolhido) => {
+    setAcolhidoParaExcluir(acolhido);
   };
 
-  const cancelarExclusao = () => {
-    if (excluindo) return;
-    setPacienteParaExcluir(null);
+  const cancelarExclusaoAcolhido = () => {
+    if (excluindoAcolhido) return;
+    setAcolhidoParaExcluir(null);
   };
 
-  const confirmarExclusao = async () => {
-    if (!pacienteParaExcluir) return;
-    setExcluindo(true);
+  const confirmarExclusaoAcolhido = async () => {
+    if (!acolhidoParaExcluir) return;
+    setExcluindoAcolhido(true);
     try {
-      await pacienteService.deletar(pacienteParaExcluir.id);
-      mostrarMensagem('sucesso', 'Paciente excluído com sucesso.');
-      if (pacienteEditando?.id === pacienteParaExcluir.id) {
-        setPacienteEditando(null);
+      await acolhidoService.deletar(acolhidoParaExcluir.id);
+      mostrarMensagem('sucesso', 'Acolhido excluído com sucesso.');
+      if (acolhidoEditando?.id === acolhidoParaExcluir.id) {
+        setAcolhidoEditando(null);
       }
-      setPacienteParaExcluir(null);
-      await carregarPacientes();
+      setAcolhidoParaExcluir(null);
+      await carregarAcolhidos();
     } catch (err) {
-      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir paciente.'));
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir acolhido.'));
     } finally {
-      setExcluindo(false);
+      setExcluindoAcolhido(false);
     }
   };
 
-  const mostrarForm = pagina === 'inicio' || pagina === 'cadastro';
-  const mostrarLista = pagina === 'inicio' || pagina === 'pacientes';
+  const handleSalvarRemedio = async (dados) => {
+    setSalvandoRemedio(true);
+    try {
+      if (remedioEditando) {
+        await remedioService.atualizar(remedioEditando.id, dados);
+        mostrarMensagem('sucesso', 'Remédio atualizado com sucesso.');
+      } else {
+        await remedioService.criar(dados);
+        mostrarMensagem('sucesso', 'Remédio cadastrado com sucesso.');
+      }
+      setRemedioEditando(null);
+      await carregarRemedios();
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar remédio.'));
+    } finally {
+      setSalvandoRemedio(false);
+    }
+  };
+
+  const handleEditarRemedio = (remedio) => {
+    setRemedioEditando(remedio);
+    setPagina('cadastro-remedio');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelarEdicaoRemedio = () => {
+    setRemedioEditando(null);
+  };
+
+  const handleExcluirRemedio = (remedio) => {
+    setRemedioParaExcluir(remedio);
+  };
+
+  const cancelarExclusaoRemedio = () => {
+    if (excluindoRemedio) return;
+    setRemedioParaExcluir(null);
+  };
+
+  const confirmarExclusaoRemedio = async () => {
+    if (!remedioParaExcluir) return;
+    setExcluindoRemedio(true);
+    try {
+      await remedioService.deletar(remedioParaExcluir.id);
+      mostrarMensagem('sucesso', 'Remédio excluído com sucesso.');
+      if (remedioEditando?.id === remedioParaExcluir.id) {
+        setRemedioEditando(null);
+      }
+      setRemedioParaExcluir(null);
+      await carregarRemedios();
+      await carregarAcolhidos();
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir remédio.'));
+    } finally {
+      setExcluindoRemedio(false);
+    }
+  };
+
   const mostrarDescricao = pagina === 'inicio';
+  const mostrarFormAcolhido = pagina === 'cadastro-acolhido';
+  const mostrarListaAcolhidos = pagina === 'acolhidos';
+  const mostrarFormRemedio = pagina === 'cadastro-remedio';
+  const mostrarListaRemedios = pagina === 'remedios';
 
   return (
     <div className="app">
@@ -144,7 +226,7 @@ export default function App() {
                 </h2>
                 <p>
                   Esse sistema gerencia o <strong>Centro Terapêutico Águas Vivas</strong>,
-                  ou seja, seus pacientes e tudo que envolve eles, como:
+                  ou seja, seus acolhidos e tudo que envolve eles, como:
                 </p>
                 <ul className="descricao-lista">
                   <li>medicações</li>
@@ -220,44 +302,78 @@ export default function App() {
           </section>
         )}
 
-        {mostrarForm && (
-          <PacienteForm
-            pacienteEditando={pacienteEditando}
-            onSalvar={handleSalvar}
-            onCancelar={handleCancelar}
-            salvando={salvando}
+        {mostrarFormAcolhido && (
+          <AcolhidoForm
+            acolhidoEditando={acolhidoEditando}
+            remediosDisponiveis={remedios}
+            onSalvar={handleSalvarAcolhido}
+            onCancelar={handleCancelarEdicaoAcolhido}
+            salvando={salvandoAcolhido}
           />
         )}
 
-        {mostrarLista && (
-          <PacienteList
-            pacientes={pacientes}
-            carregando={carregando}
-            onExibir={handleExibir}
-            onEditar={handleEditar}
-            onExcluir={handleExcluir}
+        {mostrarListaAcolhidos && (
+          <AcolhidoList
+            acolhidos={acolhidos}
+            carregando={carregandoAcolhidos}
+            onExibir={handleExibirAcolhido}
+            onEditar={handleEditarAcolhido}
+            onExcluir={handleExcluirAcolhido}
+          />
+        )}
+
+        {mostrarFormRemedio && (
+          <RemedioForm
+            remedioEditando={remedioEditando}
+            onSalvar={handleSalvarRemedio}
+            onCancelar={handleCancelarEdicaoRemedio}
+            salvando={salvandoRemedio}
+          />
+        )}
+
+        {mostrarListaRemedios && (
+          <RemedioList
+            remedios={remedios}
+            carregando={carregandoRemedios}
+            onEditar={handleEditarRemedio}
+            onExcluir={handleExcluirRemedio}
           />
         )}
       </main>
 
-      <DetalhesPacienteModal
-        paciente={pacienteSelecionado}
-        onFechar={handleFecharDetalhes}
+      <DetalhesAcolhidoModal
+        acolhido={acolhidoSelecionado}
+        onFechar={handleFecharDetalhesAcolhido}
       />
 
       <ModalConfirmacao
-        aberto={Boolean(pacienteParaExcluir)}
-        titulo="Excluir paciente"
+        aberto={Boolean(acolhidoParaExcluir)}
+        titulo="Excluir acolhido"
         mensagem={
-          pacienteParaExcluir
-            ? `Deseja realmente excluir o paciente "${pacienteParaExcluir.nome}"? Esta ação não pode ser desfeita.`
+          acolhidoParaExcluir
+            ? `Deseja realmente excluir o acolhido "${acolhidoParaExcluir.nome}"? Esta ação não pode ser desfeita.`
             : ''
         }
-        textoConfirmar={excluindo ? 'Excluindo...' : 'Excluir'}
+        textoConfirmar={excluindoAcolhido ? 'Excluindo...' : 'Excluir'}
         textoCancelar="Cancelar"
         perigo
-        onConfirmar={confirmarExclusao}
-        onCancelar={cancelarExclusao}
+        onConfirmar={confirmarExclusaoAcolhido}
+        onCancelar={cancelarExclusaoAcolhido}
+      />
+
+      <ModalConfirmacao
+        aberto={Boolean(remedioParaExcluir)}
+        titulo="Excluir remédio"
+        mensagem={
+          remedioParaExcluir
+            ? `Deseja realmente excluir o remédio "${remedioParaExcluir.nome}"? Esta ação não pode ser desfeita.`
+            : ''
+        }
+        textoConfirmar={excluindoRemedio ? 'Excluindo...' : 'Excluir'}
+        textoCancelar="Cancelar"
+        perigo
+        onConfirmar={confirmarExclusaoRemedio}
+        onCancelar={cancelarExclusaoRemedio}
       />
     </div>
   );

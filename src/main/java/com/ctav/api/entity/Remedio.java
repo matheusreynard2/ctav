@@ -39,6 +39,9 @@ public class Remedio {
     @Column(nullable = false, length = 120)
     private String nome;
 
+    @Column(nullable = false, length = 255)
+    private String descricao;
+
     @Column(nullable = false)
     private Integer quantidade_caixas;
 

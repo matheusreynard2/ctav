@@ -1,6 +1,6 @@
 # CTAV - Frontend
 
-Interface React (Vite) para gerenciamento de pacientes da API CTAV.
+Interface React (Vite) para gerenciamento de acolhidos da API CTAV.
 
 ## Pré-requisitos
 
@@ -31,9 +31,9 @@ npm run preview
 
 ## Funcionalidades
 
-- Listagem de pacientes em tabela
-- Cadastro de novo paciente
-- Edição de paciente existente
+- Listagem de acolhidos em tabela
+- Cadastro de novo acolhido
+- Edição de acolhido existente
 - Exclusão com confirmação
 - Validação de campos obrigatórios
 - Mensagens de sucesso/erro

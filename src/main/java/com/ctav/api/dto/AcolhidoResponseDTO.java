@@ -1,6 +1,6 @@
 package com.ctav.api.dto;
 
-import com.ctav.api.entity.Paciente;
+import com.ctav.api.entity.Acolhido;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,7 +16,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PacienteResponseDTO {
+public class AcolhidoResponseDTO {
 
     private Long id;
     private String nome;
@@ -30,25 +30,25 @@ public class PacienteResponseDTO {
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
 
-    public static PacienteResponseDTO fromEntity(Paciente paciente) {
-        List<RemedioResponseDTO> remedios = paciente.getRemedios_prescritos() == null
+    public static AcolhidoResponseDTO fromEntity(Acolhido acolhido) {
+        List<RemedioResponseDTO> remedios = acolhido.getRemedios_prescritos() == null
                 ? List.of()
-                : paciente.getRemedios_prescritos().stream()
+                : acolhido.getRemedios_prescritos().stream()
                         .map(RemedioResponseDTO::fromEntity)
                         .toList();
 
-        return PacienteResponseDTO.builder()
-                .id(paciente.getId())
-                .nome(paciente.getNome())
-                .cpf(paciente.getCpf())
-                .dataNascimento(paciente.getDataNascimento())
-                .email(paciente.getEmail())
-                .telefone(paciente.getTelefone())
-                .sexo(paciente.getSexo())
-                .endereco(paciente.getEndereco())
+        return AcolhidoResponseDTO.builder()
+                .id(acolhido.getId())
+                .nome(acolhido.getNome())
+                .cpf(acolhido.getCpf())
+                .dataNascimento(acolhido.getDataNascimento())
+                .email(acolhido.getEmail())
+                .telefone(acolhido.getTelefone())
+                .sexo(acolhido.getSexo())
+                .endereco(acolhido.getEndereco())
                 .remedios_prescritos(remedios)
-                .criadoEm(paciente.getCriadoEm())
-                .atualizadoEm(paciente.getAtualizadoEm())
+                .criadoEm(acolhido.getCriadoEm())
+                .atualizadoEm(acolhido.getAtualizadoEm())
                 .build();
     }
 }

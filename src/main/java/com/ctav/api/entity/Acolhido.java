@@ -26,14 +26,14 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
-@Table(name = "pacientes")
+@Table(name = "acolhidos")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
-public class Paciente {
+public class Acolhido {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -62,8 +62,8 @@ public class Paciente {
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
-            name = "paciente_remedio",
-            joinColumns = @JoinColumn(name = "paciente_id"),
+            name = "acolhido_remedio",
+            joinColumns = @JoinColumn(name = "acolhido_id"),
             inverseJoinColumns = @JoinColumn(name = "remedio_id")
     )
     @Builder.Default

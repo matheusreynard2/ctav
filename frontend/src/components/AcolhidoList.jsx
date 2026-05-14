@@ -1,25 +1,26 @@
-export default function PacienteList({
-  pacientes,
+export default function AcolhidoList({
+  acolhidos,
   carregando,
   onExibir,
   onEditar,
   onExcluir,
 }) {
   if (carregando) {
-    return <div className="card vazio">Carregando pacientes...</div>;
+    return <div className="card vazio">Carregando acolhidos...</div>;
   }
 
-  if (!pacientes.length) {
+  if (!acolhidos.length) {
     return (
       <div className="card vazio">
-        Nenhum paciente cadastrado. Use o formulário acima para adicionar o primeiro.
+        Nenhum acolhido cadastrado. Use o formulário em &apos;Acolhidos &gt; Cadastrar acolhido&apos;
+        para fazer cadastros.
       </div>
     );
   }
 
   return (
     <div className="card tabela-wrapper">
-      <h2>Pacientes cadastrados ({pacientes.length})</h2>
+      <h2>Acolhidos cadastrados ({acolhidos.length})</h2>
       <table className="tabela">
         <thead>
           <tr>
@@ -30,7 +31,7 @@ export default function PacienteList({
           </tr>
         </thead>
         <tbody>
-          {pacientes.map((p) => (
+          {acolhidos.map((p) => (
             <tr key={p.id}>
               <td>{p.nome}</td>
               <td>{p.cpf}</td>

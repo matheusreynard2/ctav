@@ -22,6 +22,10 @@ public class RemedioRequestDTO {
     @Size(min = 2, max = 120, message = "O nome deve ter entre 2 e 120 caracteres")
     private String nome;
 
+    @NotBlank(message = "A descrição é obrigatória")
+    @Size(min = 2, max = 255, message = "A descrição deve ter entre 2 e 255 caracteres")
+    private String descricao;
+
     @NotNull(message = "A quantidade de caixas é obrigatória")
     @Min(value = 0, message = "A quantidade de caixas não pode ser negativa")
     private Integer quantidade_caixas;
