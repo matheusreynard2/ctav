@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Logo from './Logo.jsx';
 
 const ITENS_MENU = [
   { id: 'inicio', label: 'Início' },
@@ -11,18 +12,28 @@ const ITENS_MENU = [
     ],
   },
   {
-    id: 'grupo-remedios',
-    label: 'Remédios',
+    id: 'grupo-medicamentos',
+    label: 'Medicamentos',
     filhos: [
-      { id: 'remedios', label: 'Lista de remédios' },
-      { id: 'cadastro-remedio', label: 'Cadastrar remédio' },
+      { id: 'medicamentos', label: 'Lista de medicamentos' },
+      { id: 'cadastro-medicamento', label: 'Cadastrar medicamento' },
+      { id: 'controle-medicamentos', label: 'Controle de administração' },
     ],
   },
+  {
+    id: 'grupo-combinados',
+    label: 'Combinados',
+    filhos: [
+      { id: 'combinados', label: 'Lista de combinados' },
+      { id: 'cadastro-combinado', label: 'Cadastrar combinado' },
+    ],
+  },
+  { id: 'relatorios', label: 'Relatórios' },
 ];
 
 const FECHAR_DELAY_MS = 180;
 
-export default function Header({ pagina, onNavegar }) {
+export default function Header({ pagina, onNavegar, usuario, onLogout }) {
   const [aberto, setAberto] = useState(false);
   const [submenuAberto, setSubmenuAberto] = useState(null);
   const menuRef = useRef(null);
@@ -99,11 +110,34 @@ export default function Header({ pagina, onNavegar }) {
     <header className="topo">
       <div className="container topo-conteudo">
         <div className="topo-titulo">
+          <span className="topo-logo" aria-hidden="true">
+            <Logo className="topo-logo-img" />
+          </span>
           <h1>
-            C T A V
             <span className="topo-titulo-extenso">Comunidade Terapêutica Águas Vivas</span>
           </h1>
         </div>
+
+        {usuario && (
+          <div className="topo-usuario">
+            <span className="topo-usuario-nome">
+              {usuario.nome?.trim() || usuario.username}
+            </span>
+            <button
+              type="button"
+              className="btn-sair"
+              onClick={onLogout}
+              title="Sair"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              Sair
+            </button>
+          </div>
+        )}
 
         <button
           ref={botaoRef}

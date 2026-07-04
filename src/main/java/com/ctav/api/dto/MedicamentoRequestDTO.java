@@ -16,7 +16,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class RemedioRequestDTO {
+public class MedicamentoRequestDTO {
 
     @NotBlank(message = "O nome é obrigatório")
     @Size(min = 2, max = 120, message = "O nome deve ter entre 2 e 120 caracteres")
@@ -29,4 +29,8 @@ public class RemedioRequestDTO {
     @NotNull(message = "A quantidade de caixas é obrigatória")
     @Min(value = 0, message = "A quantidade de caixas não pode ser negativa")
     private Integer quantidade_caixas;
+
+    @NotNull(message = "A quantidade por caixa é obrigatória")
+    @Min(value = 0, message = "A quantidade por caixa não pode ser negativa")
+    private Integer quantidade_por_caixa;
 }

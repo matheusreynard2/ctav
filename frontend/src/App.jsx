@@ -1,36 +1,66 @@
 import { useEffect, useState } from 'react';
-import { acolhidoService, remedioService } from './api';
+import {
+  acolhidoService,
+  anexoService,
+  authService,
+  combinadoService,
+  medicamentoService,
+} from './api';
+import Login from './components/Login.jsx';
 import DetalhesAcolhidoModal from './components/DetalhesAcolhidoModal.jsx';
+import DetalhesCombinadoModal from './components/DetalhesCombinadoModal.jsx';
+import GerenciarAnexosModal from './components/GerenciarAnexosModal.jsx';
 import Header from './components/Header.jsx';
 import ModalConfirmacao from './components/ModalConfirmacao.jsx';
+import ModalMensagem from './components/ModalMensagem.jsx';
 import AcolhidoForm from './components/AcolhidoForm.jsx';
 import AcolhidoList from './components/AcolhidoList.jsx';
-import RemedioForm from './components/RemedioForm.jsx';
-import RemedioList from './components/RemedioList.jsx';
+import MedicamentoForm from './components/MedicamentoForm.jsx';
+import MedicamentoList from './components/MedicamentoList.jsx';
+import CombinadoForm from './components/CombinadoForm.jsx';
+import CombinadoList from './components/CombinadoList.jsx';
+import Relatorios from './components/Relatorios.jsx';
+import ControleMedicamentos from './components/ControleMedicamentos.jsx';
 
 export default function App() {
   const [pagina, setPagina] = useState('inicio');
+
+  const [usuario, setUsuario] = useState(null);
+  const [verificandoAuth, setVerificandoAuth] = useState(true);
 
   const [acolhidos, setAcolhidos] = useState([]);
   const [carregandoAcolhidos, setCarregandoAcolhidos] = useState(false);
   const [salvandoAcolhido, setSalvandoAcolhido] = useState(false);
   const [acolhidoEditando, setAcolhidoEditando] = useState(null);
   const [acolhidoSelecionado, setAcolhidoSelecionado] = useState(null);
+  const [acolhidoAnexos, setAcolhidoAnexos] = useState(null);
   const [acolhidoParaExcluir, setAcolhidoParaExcluir] = useState(null);
   const [excluindoAcolhido, setExcluindoAcolhido] = useState(false);
 
-  const [remedios, setRemedios] = useState([]);
-  const [carregandoRemedios, setCarregandoRemedios] = useState(false);
-  const [salvandoRemedio, setSalvandoRemedio] = useState(false);
-  const [remedioEditando, setRemedioEditando] = useState(null);
-  const [remedioParaExcluir, setRemedioParaExcluir] = useState(null);
-  const [excluindoRemedio, setExcluindoRemedio] = useState(false);
+  const [medicamentos, setMedicamentos] = useState([]);
+  const [carregandoMedicamentos, setCarregandoMedicamentos] = useState(false);
+  const [salvandoMedicamento, setSalvandoMedicamento] = useState(false);
+  const [medicamentoEditando, setMedicamentoEditando] = useState(null);
+  const [medicamentoParaExcluir, setMedicamentoParaExcluir] = useState(null);
+  const [excluindoMedicamento, setExcluindoMedicamento] = useState(false);
 
-  const [mensagem, setMensagem] = useState(null);
+  const [combinados, setCombinados] = useState([]);
+  const [carregandoCombinados, setCarregandoCombinados] = useState(false);
+  const [salvandoCombinado, setSalvandoCombinado] = useState(false);
+  const [combinadoEditando, setCombinadoEditando] = useState(null);
+  const [combinadoSelecionado, setCombinadoSelecionado] = useState(null);
+  const [combinadoParaExcluir, setCombinadoParaExcluir] = useState(null);
+  const [excluindoCombinado, setExcluindoCombinado] = useState(false);
 
-  const mostrarMensagem = (tipo, texto) => {
-    setMensagem({ tipo, texto });
-    setTimeout(() => setMensagem(null), 4000);
+  // Modal unico para todas as mensagens (sucesso, erro, atualizacoes, etc.).
+  const [modal, setModal] = useState(null); // { id, tipo, texto, paginaDestino }
+
+  // Exclusao em massa (selecao por checkbox nas listagens).
+  const [exclusaoEmMassa, setExclusaoEmMassa] = useState(null); // { tipo, registros }
+  const [excluindoEmMassa, setExcluindoEmMassa] = useState(false);
+
+  const mostrarMensagem = (tipo, texto, paginaDestino = null) => {
+    setModal({ id: Date.now() + Math.random(), tipo, texto, paginaDestino });
   };
 
   const extrairErroApi = (err, padrao) => {
@@ -41,6 +71,7 @@ export default function App() {
         .map(([campo, msg]) => `${campo}: ${msg}`)
         .join(' | ');
     }
+    if (!err?.response && err?.message) return err.message;
     return padrao;
   };
 
@@ -48,7 +79,7 @@ export default function App() {
     setCarregandoAcolhidos(true);
     try {
       const dados = await acolhidoService.listar();
-      setAcolhidos(dados);
+      setAcolhidos(Array.isArray(dados) ? dados : []);
     } catch (err) {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar acolhidos.'));
     } finally {
@@ -56,44 +87,150 @@ export default function App() {
     }
   };
 
-  const carregarRemedios = async () => {
-    setCarregandoRemedios(true);
+  const carregarMedicamentos = async () => {
+    setCarregandoMedicamentos(true);
     try {
-      const dados = await remedioService.listar();
-      setRemedios(dados);
+      const dados = await medicamentoService.listar();
+      setMedicamentos(Array.isArray(dados) ? dados : []);
     } catch (err) {
-      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar remédios.'));
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar medicamentos.'));
     } finally {
-      setCarregandoRemedios(false);
+      setCarregandoMedicamentos(false);
     }
   };
 
+  const carregarCombinados = async () => {
+    setCarregandoCombinados(true);
+    try {
+      const dados = await combinadoService.listar();
+      setCombinados(Array.isArray(dados) ? dados : []);
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar combinados.'));
+    } finally {
+      setCarregandoCombinados(false);
+    }
+  };
+
+  // Verifica a sessao ao abrir o app (cookie HttpOnly enviado automaticamente).
   useEffect(() => {
-    carregarAcolhidos();
-    carregarRemedios();
+    let ativo = true;
+    authService
+      .me()
+      .then((u) => {
+        if (ativo) setUsuario(u);
+      })
+      .catch(() => {
+        if (ativo) setUsuario(null);
+      })
+      .finally(() => {
+        if (ativo) setVerificandoAuth(false);
+      });
+    return () => {
+      ativo = false;
+    };
   }, []);
+
+  // Sessao expirada (401 em qualquer rota protegida) -> volta ao login.
+  useEffect(() => {
+    const aoExpirar = () => setUsuario(null);
+    window.addEventListener('auth:expirado', aoExpirar);
+    return () => window.removeEventListener('auth:expirado', aoExpirar);
+  }, []);
+
+  // Carrega os dados somente quando ha um usuario autenticado.
+  useEffect(() => {
+    if (!usuario) return;
+    carregarAcolhidos();
+    carregarMedicamentos();
+    carregarCombinados();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario]);
 
   const handleNavegar = (novaPagina) => {
     setPagina(novaPagina);
     setAcolhidoEditando(null);
-    setRemedioEditando(null);
+    setMedicamentoEditando(null);
+    setCombinadoEditando(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSalvarAcolhido = async (dados) => {
+  const abrirModalSucesso = (texto, paginaDestino) => {
+    setModal({ id: Date.now() + Math.random(), tipo: 'sucesso', texto, paginaDestino });
+  };
+
+  const fecharModal = () => {
+    const destino = modal?.paginaDestino;
+    setModal(null);
+    if (destino === 'acolhidos') {
+      setAcolhidoEditando(null);
+      setPagina('acolhidos');
+    } else if (destino === 'medicamentos') {
+      setMedicamentoEditando(null);
+      setPagina('medicamentos');
+    } else if (destino === 'combinados') {
+      setCombinadoEditando(null);
+      setPagina('combinados');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSalvarAcolhido = async (dados, anexosPendentes = [], foto = {}) => {
     setSalvandoAcolhido(true);
     try {
       if (acolhidoEditando) {
         await acolhidoService.atualizar(acolhidoEditando.id, dados);
-        mostrarMensagem('sucesso', 'Acolhido atualizado com sucesso.');
-      } else {
-        await acolhidoService.criar(dados);
-        mostrarMensagem('sucesso', 'Acolhido cadastrado com sucesso.');
+        try {
+          if (foto.file) {
+            await acolhidoService.enviarFoto(acolhidoEditando.id, foto.file);
+          } else if (foto.remover) {
+            await acolhidoService.removerFoto(acolhidoEditando.id);
+          }
+        } catch {
+          mostrarMensagem('erro', 'Acolhido atualizado, mas a foto não pôde ser salva.');
+        }
+        await carregarAcolhidos();
+        abrirModalSucesso('Acolhido atualizado com sucesso.', 'acolhidos');
+        return true;
       }
-      setAcolhidoEditando(null);
+
+      const criado = await acolhidoService.criar(dados);
+
+      let falhas = 0;
+      for (const anexo of anexosPendentes) {
+        try {
+          await anexoService.enviar(criado.id, anexo.file, anexo.tipo, anexo.nomeArquivo);
+        } catch {
+          falhas += 1;
+        }
+      }
+
+      let falhaFoto = false;
+      if (foto.file) {
+        try {
+          await acolhidoService.enviarFoto(criado.id, foto.file);
+        } catch {
+          falhaFoto = true;
+        }
+      }
+
       await carregarAcolhidos();
+
+      if (falhas > 0 || falhaFoto) {
+        const partes = [];
+        if (falhas > 0) partes.push(`${falhas} anexo(s)`);
+        if (falhaFoto) partes.push('a foto');
+        mostrarMensagem(
+          'erro',
+          `Acolhido cadastrado, mas ${partes.join(' e ')} não puderam ser enviados.`
+        );
+      } else {
+        abrirModalSucesso('Acolhido cadastrado com sucesso.', 'acolhidos');
+      }
+
+      return criado;
     } catch (err) {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar acolhido.'));
+      return null;
     } finally {
       setSalvandoAcolhido(false);
     }
@@ -107,6 +244,14 @@ export default function App() {
     setAcolhidoSelecionado(null);
   };
 
+  const handleAnexosAcolhido = (acolhido) => {
+    setAcolhidoAnexos(acolhido);
+  };
+
+  const handleFecharAnexosAcolhido = () => {
+    setAcolhidoAnexos(null);
+  };
+
   const handleEditarAcolhido = (acolhido) => {
     setAcolhidoEditando(acolhido);
     setPagina('cadastro-acolhido');
@@ -115,6 +260,8 @@ export default function App() {
 
   const handleCancelarEdicaoAcolhido = () => {
     setAcolhidoEditando(null);
+    setPagina('acolhidos');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleExcluirAcolhido = (acolhido) => {
@@ -137,6 +284,7 @@ export default function App() {
       }
       setAcolhidoParaExcluir(null);
       await carregarAcolhidos();
+      await carregarCombinados();
     } catch (err) {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir acolhido.'));
     } finally {
@@ -144,78 +292,239 @@ export default function App() {
     }
   };
 
-  const handleSalvarRemedio = async (dados) => {
-    setSalvandoRemedio(true);
+  const handleSalvarMedicamento = async (dados) => {
+    setSalvandoMedicamento(true);
     try {
-      if (remedioEditando) {
-        await remedioService.atualizar(remedioEditando.id, dados);
-        mostrarMensagem('sucesso', 'Remédio atualizado com sucesso.');
+      if (medicamentoEditando) {
+        await medicamentoService.atualizar(medicamentoEditando.id, dados);
+        await carregarMedicamentos();
+        abrirModalSucesso('Medicamento atualizado com sucesso.', 'medicamentos');
       } else {
-        await remedioService.criar(dados);
-        mostrarMensagem('sucesso', 'Remédio cadastrado com sucesso.');
+        await medicamentoService.criar(dados);
+        setMedicamentoEditando(null);
+        await carregarMedicamentos();
+        abrirModalSucesso('Medicamento cadastrado com sucesso.', 'medicamentos');
       }
-      setRemedioEditando(null);
-      await carregarRemedios();
     } catch (err) {
-      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar remédio.'));
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar medicamento.'));
     } finally {
-      setSalvandoRemedio(false);
+      setSalvandoMedicamento(false);
     }
   };
 
-  const handleEditarRemedio = (remedio) => {
-    setRemedioEditando(remedio);
-    setPagina('cadastro-remedio');
+  const handleEditarMedicamento = (medicamento) => {
+    setMedicamentoEditando(medicamento);
+    setPagina('cadastro-medicamento');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleCancelarEdicaoRemedio = () => {
-    setRemedioEditando(null);
+  const handleCancelarEdicaoMedicamento = () => {
+    setMedicamentoEditando(null);
+    setPagina('medicamentos');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleExcluirRemedio = (remedio) => {
-    setRemedioParaExcluir(remedio);
+  const handleExcluirMedicamento = (medicamento) => {
+    setMedicamentoParaExcluir(medicamento);
   };
 
-  const cancelarExclusaoRemedio = () => {
-    if (excluindoRemedio) return;
-    setRemedioParaExcluir(null);
+  const cancelarExclusaoMedicamento = () => {
+    if (excluindoMedicamento) return;
+    setMedicamentoParaExcluir(null);
   };
 
-  const confirmarExclusaoRemedio = async () => {
-    if (!remedioParaExcluir) return;
-    setExcluindoRemedio(true);
+  const confirmarExclusaoMedicamento = async () => {
+    if (!medicamentoParaExcluir) return;
+    setExcluindoMedicamento(true);
     try {
-      await remedioService.deletar(remedioParaExcluir.id);
-      mostrarMensagem('sucesso', 'Remédio excluído com sucesso.');
-      if (remedioEditando?.id === remedioParaExcluir.id) {
-        setRemedioEditando(null);
+      await medicamentoService.deletar(medicamentoParaExcluir.id);
+      mostrarMensagem('sucesso', 'Medicamento excluído com sucesso.');
+      if (medicamentoEditando?.id === medicamentoParaExcluir.id) {
+        setMedicamentoEditando(null);
       }
-      setRemedioParaExcluir(null);
-      await carregarRemedios();
+      setMedicamentoParaExcluir(null);
+      await carregarMedicamentos();
       await carregarAcolhidos();
     } catch (err) {
-      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir remédio.'));
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir medicamento.'));
     } finally {
-      setExcluindoRemedio(false);
+      setExcluindoMedicamento(false);
     }
+  };
+
+  const handleSalvarCombinado = async (dados) => {
+    setSalvandoCombinado(true);
+    try {
+      if (combinadoEditando) {
+        await combinadoService.atualizar(combinadoEditando.id, dados);
+        await carregarCombinados();
+        abrirModalSucesso('Combinado atualizado com sucesso.', 'combinados');
+      } else {
+        await combinadoService.criar(dados);
+        setCombinadoEditando(null);
+        await carregarCombinados();
+        abrirModalSucesso('Combinado cadastrado com sucesso.', 'combinados');
+      }
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar combinado.'));
+    } finally {
+      setSalvandoCombinado(false);
+    }
+  };
+
+  const handleExibirCombinado = (combinado) => {
+    setCombinadoSelecionado(combinado);
+  };
+
+  const handleFecharDetalhesCombinado = () => {
+    setCombinadoSelecionado(null);
+  };
+
+  const handleEditarCombinado = (combinado) => {
+    setCombinadoEditando(combinado);
+    setPagina('cadastro-combinado');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelarEdicaoCombinado = () => {
+    setCombinadoEditando(null);
+    setPagina('combinados');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleExcluirCombinado = (combinado) => {
+    setCombinadoParaExcluir(combinado);
+  };
+
+  const cancelarExclusaoCombinado = () => {
+    if (excluindoCombinado) return;
+    setCombinadoParaExcluir(null);
+  };
+
+  const confirmarExclusaoCombinado = async () => {
+    if (!combinadoParaExcluir) return;
+    setExcluindoCombinado(true);
+    try {
+      await combinadoService.deletar(combinadoParaExcluir.id);
+      mostrarMensagem('sucesso', 'Combinado excluído com sucesso.');
+      if (combinadoEditando?.id === combinadoParaExcluir.id) {
+        setCombinadoEditando(null);
+      }
+      setCombinadoParaExcluir(null);
+      await carregarCombinados();
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir combinado.'));
+    } finally {
+      setExcluindoCombinado(false);
+    }
+  };
+
+  const handleExcluirSelecionados = (tipo, registros) => {
+    if (!registros?.length) return;
+    setExclusaoEmMassa({ tipo, registros });
+  };
+
+  const cancelarExclusaoEmMassa = () => {
+    if (excluindoEmMassa) return;
+    setExclusaoEmMassa(null);
+  };
+
+  const confirmarExclusaoEmMassa = async () => {
+    if (!exclusaoEmMassa) return;
+    const { tipo, registros } = exclusaoEmMassa;
+    const service =
+      tipo === 'acolhido'
+        ? acolhidoService
+        : tipo === 'medicamento'
+          ? medicamentoService
+          : combinadoService;
+
+    setExcluindoEmMassa(true);
+    let sucesso = 0;
+    let falhas = 0;
+    for (const r of registros) {
+      try {
+        await service.deletar(r.id);
+        sucesso += 1;
+      } catch {
+        falhas += 1;
+      }
+    }
+
+    if (tipo === 'acolhido') {
+      await carregarAcolhidos();
+      await carregarCombinados();
+    } else if (tipo === 'medicamento') {
+      await carregarMedicamentos();
+    } else {
+      await carregarCombinados();
+    }
+
+    setExclusaoEmMassa(null);
+    setExcluindoEmMassa(false);
+
+    if (falhas === 0) {
+      mostrarMensagem('sucesso', `${sucesso} registro(s) excluído(s) com sucesso.`);
+    } else if (sucesso === 0) {
+      mostrarMensagem('erro', 'Não foi possível excluir os registros selecionados.');
+    } else {
+      mostrarMensagem(
+        'erro',
+        `${sucesso} registro(s) excluído(s); ${falhas} não puderam ser excluídos.`
+      );
+    }
+  };
+
+  const handleAutenticado = (u) => {
+    setUsuario(u);
+    setPagina('inicio');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch {
+      // ignora erros de logout; limpa o estado local de qualquer forma
+    }
+    setUsuario(null);
+    setPagina('inicio');
+    setAcolhidos([]);
+    setMedicamentos([]);
+    setCombinados([]);
   };
 
   const mostrarDescricao = pagina === 'inicio';
   const mostrarFormAcolhido = pagina === 'cadastro-acolhido';
   const mostrarListaAcolhidos = pagina === 'acolhidos';
-  const mostrarFormRemedio = pagina === 'cadastro-remedio';
-  const mostrarListaRemedios = pagina === 'remedios';
+  const mostrarFormMedicamento = pagina === 'cadastro-medicamento';
+  const mostrarListaMedicamentos = pagina === 'medicamentos';
+  const mostrarFormCombinado = pagina === 'cadastro-combinado';
+  const mostrarListaCombinados = pagina === 'combinados';
+  const mostrarRelatorios = pagina === 'relatorios';
+  const mostrarControleMedicamentos = pagina === 'controle-medicamentos';
+
+  if (verificandoAuth) {
+    return (
+      <div className="app">
+        <div className="auth-carregando">Carregando...</div>
+      </div>
+    );
+  }
+
+  if (!usuario) {
+    return <Login onAutenticado={handleAutenticado} />;
+  }
 
   return (
     <div className="app">
-      <Header pagina={pagina} onNavegar={handleNavegar} />
+      <Header
+        pagina={pagina}
+        onNavegar={handleNavegar}
+        usuario={usuario}
+        onLogout={handleLogout}
+      />
 
       <main className="container conteudo">
-        {mensagem && (
-          <div className={`alerta alerta-${mensagem.tipo}`}>{mensagem.texto}</div>
-        )}
-
         {mostrarDescricao && (
           <section className="card descricao-sistema">
             <div className="descricao-conteudo">
@@ -305,9 +614,10 @@ export default function App() {
         {mostrarFormAcolhido && (
           <AcolhidoForm
             acolhidoEditando={acolhidoEditando}
-            remediosDisponiveis={remedios}
+            medicamentosDisponiveis={medicamentos}
             onSalvar={handleSalvarAcolhido}
             onCancelar={handleCancelarEdicaoAcolhido}
+            onVerLista={() => handleNavegar('acolhidos')}
             salvando={salvandoAcolhido}
           />
         )}
@@ -319,24 +629,77 @@ export default function App() {
             onExibir={handleExibirAcolhido}
             onEditar={handleEditarAcolhido}
             onExcluir={handleExcluirAcolhido}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('acolhido', registros)
+            }
+            onAnexos={handleAnexosAcolhido}
+            onNovo={() => handleNavegar('cadastro-acolhido')}
           />
         )}
 
-        {mostrarFormRemedio && (
-          <RemedioForm
-            remedioEditando={remedioEditando}
-            onSalvar={handleSalvarRemedio}
-            onCancelar={handleCancelarEdicaoRemedio}
-            salvando={salvandoRemedio}
+        {mostrarFormMedicamento && (
+          <MedicamentoForm
+            medicamentoEditando={medicamentoEditando}
+            onSalvar={handleSalvarMedicamento}
+            onCancelar={handleCancelarEdicaoMedicamento}
+            onVerLista={() => handleNavegar('medicamentos')}
+            salvando={salvandoMedicamento}
           />
         )}
 
-        {mostrarListaRemedios && (
-          <RemedioList
-            remedios={remedios}
-            carregando={carregandoRemedios}
-            onEditar={handleEditarRemedio}
-            onExcluir={handleExcluirRemedio}
+        {mostrarListaMedicamentos && (
+          <MedicamentoList
+            medicamentos={medicamentos}
+            carregando={carregandoMedicamentos}
+            onEditar={handleEditarMedicamento}
+            onExcluir={handleExcluirMedicamento}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('medicamento', registros)
+            }
+            onNovo={() => handleNavegar('cadastro-medicamento')}
+          />
+        )}
+
+        {mostrarFormCombinado && (
+          <CombinadoForm
+            combinadoEditando={combinadoEditando}
+            acolhidosDisponiveis={acolhidos}
+            onSalvar={handleSalvarCombinado}
+            onCancelar={handleCancelarEdicaoCombinado}
+            onVerLista={() => handleNavegar('combinados')}
+            salvando={salvandoCombinado}
+          />
+        )}
+
+        {mostrarListaCombinados && (
+          <CombinadoList
+            combinados={combinados}
+            carregando={carregandoCombinados}
+            onExibir={handleExibirCombinado}
+            onEditar={handleEditarCombinado}
+            onExcluir={handleExcluirCombinado}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('combinado', registros)
+            }
+            onNovo={() => handleNavegar('cadastro-combinado')}
+          />
+        )}
+
+        {mostrarRelatorios && (
+          <Relatorios
+            acolhidos={acolhidos}
+            carregando={carregandoAcolhidos}
+            onErro={(msg) => mostrarMensagem('erro', msg)}
+          />
+        )}
+
+        {mostrarControleMedicamentos && (
+          <ControleMedicamentos
+            acolhidos={acolhidos}
+            carregando={carregandoAcolhidos}
+            onErro={(msg) => mostrarMensagem('erro', msg)}
+            onSucesso={(msg) => mostrarMensagem('sucesso', msg)}
+            onRecarregarAcolhidos={carregarAcolhidos}
           />
         )}
       </main>
@@ -344,6 +707,16 @@ export default function App() {
       <DetalhesAcolhidoModal
         acolhido={acolhidoSelecionado}
         onFechar={handleFecharDetalhesAcolhido}
+      />
+
+      <DetalhesCombinadoModal
+        combinado={combinadoSelecionado}
+        onFechar={handleFecharDetalhesCombinado}
+      />
+
+      <GerenciarAnexosModal
+        acolhido={acolhidoAnexos}
+        onFechar={handleFecharAnexosAcolhido}
       />
 
       <ModalConfirmacao
@@ -362,18 +735,57 @@ export default function App() {
       />
 
       <ModalConfirmacao
-        aberto={Boolean(remedioParaExcluir)}
-        titulo="Excluir remédio"
+        aberto={Boolean(medicamentoParaExcluir)}
+        titulo="Excluir medicamento"
         mensagem={
-          remedioParaExcluir
-            ? `Deseja realmente excluir o remédio "${remedioParaExcluir.nome}"? Esta ação não pode ser desfeita.`
+          medicamentoParaExcluir
+            ? `Deseja realmente excluir o medicamento "${medicamentoParaExcluir.nome}"? Esta ação não pode ser desfeita.`
             : ''
         }
-        textoConfirmar={excluindoRemedio ? 'Excluindo...' : 'Excluir'}
+        textoConfirmar={excluindoMedicamento ? 'Excluindo...' : 'Excluir'}
         textoCancelar="Cancelar"
         perigo
-        onConfirmar={confirmarExclusaoRemedio}
-        onCancelar={cancelarExclusaoRemedio}
+        onConfirmar={confirmarExclusaoMedicamento}
+        onCancelar={cancelarExclusaoMedicamento}
+      />
+
+      <ModalConfirmacao
+        aberto={Boolean(combinadoParaExcluir)}
+        titulo="Excluir combinado"
+        mensagem={
+          combinadoParaExcluir
+            ? `Deseja realmente excluir este combinado de "${combinadoParaExcluir.acolhidoNome ?? 'acolhido'}"? Esta ação não pode ser desfeita.`
+            : ''
+        }
+        textoConfirmar={excluindoCombinado ? 'Excluindo...' : 'Excluir'}
+        textoCancelar="Cancelar"
+        perigo
+        onConfirmar={confirmarExclusaoCombinado}
+        onCancelar={cancelarExclusaoCombinado}
+      />
+
+      <ModalConfirmacao
+        aberto={Boolean(exclusaoEmMassa)}
+        titulo="Excluir selecionados"
+        mensagem={
+          exclusaoEmMassa
+            ? `Deseja realmente excluir os ${exclusaoEmMassa.registros.length} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`
+            : ''
+        }
+        textoConfirmar={excluindoEmMassa ? 'Excluindo...' : 'Excluir'}
+        textoCancelar="Cancelar"
+        perigo
+        onConfirmar={confirmarExclusaoEmMassa}
+        onCancelar={cancelarExclusaoEmMassa}
+      />
+
+      <ModalMensagem
+        key={modal?.id}
+        aberto={Boolean(modal)}
+        tipo={modal?.tipo ?? 'sucesso'}
+        mensagem={modal?.texto ?? ''}
+        duracao={modal?.tipo === 'erro' ? 7000 : 4000}
+        onFechar={fecharModal}
       />
     </div>
   );

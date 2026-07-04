@@ -44,9 +44,19 @@ export default function DetalhesAcolhidoModal({ acolhido, onFechar }) {
 
   if (!acolhido) return null;
 
-  const remedios = Array.isArray(acolhido.remedios_prescritos)
-    ? acolhido.remedios_prescritos
+  const prescricoes = Array.isArray(acolhido.prescricoes)
+    ? acolhido.prescricoes
     : [];
+
+  const resumoDose = (p) => {
+    const partes = [];
+    if (p.doseManha > 0) partes.push(`Manhã: ${p.doseManha}`);
+    if (p.doseTarde > 0) partes.push(`Tarde: ${p.doseTarde}`);
+    if (p.doseNoite > 0) partes.push(`Noite: ${p.doseNoite}`);
+    return partes.length
+      ? partes.join(' · ')
+      : 'Doses no controle de administração';
+  };
 
   return (
     <div
@@ -60,9 +70,21 @@ export default function DetalhesAcolhidoModal({ acolhido, onFechar }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="detalhes-cabecalho">
-          <div>
-            <span className="detalhes-eyebrow">Acolhido</span>
-            <h3 className="modal-titulo detalhes-nome">{acolhido.nome}</h3>
+          <div className="detalhes-cabecalho-info">
+            <div className="detalhes-foto">
+              {acolhido.fotoUrl ? (
+                <img src={acolhido.fotoUrl} alt={`Foto de ${acolhido.nome}`} />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              )}
+            </div>
+            <div>
+              <span className="detalhes-eyebrow">Acolhido</span>
+              <h3 className="modal-titulo detalhes-nome">{acolhido.nome}</h3>
+            </div>
           </div>
           <button
             type="button"
@@ -74,6 +96,7 @@ export default function DetalhesAcolhidoModal({ acolhido, onFechar }) {
           </button>
         </div>
 
+        <div className="detalhes-corpo">
         <section className="detalhes-secao">
           <h4 className="detalhes-secao-titulo">Dados pessoais</h4>
           <div className="detalhes-grid">
@@ -90,12 +113,27 @@ export default function DetalhesAcolhidoModal({ acolhido, onFechar }) {
               label="Data de acolhimento (entrada)"
               valor={formatarData(acolhido.dataAcolhimentoCtav)}
             />
-            <Campo
-              label="Data de saída / alta"
-              valor={formatarData(acolhido.dataSaidaCtav)}
-            />
+            <Campo label="Quarto" valor={acolhido.quarto} />
           </div>
         </section>
+
+        {acolhido.alta && (
+          <section className="detalhes-secao">
+            <h4 className="detalhes-secao-titulo">Alta</h4>
+            <div className="detalhes-grid">
+              <Campo label="Data da alta" valor={formatarData(acolhido.dataAlta)} />
+              <Campo
+                label="Tipo de alta"
+                valor={acolhido.tipoAltaRotulo ?? acolhido.tipoAlta}
+              />
+              <Campo
+                label="Descrição da alta"
+                valor={acolhido.descricaoAlta}
+                largo
+              />
+            </div>
+          </section>
+        )}
 
         <section className="detalhes-secao">
           <h4 className="detalhes-secao-titulo">Contato</h4>
@@ -107,26 +145,28 @@ export default function DetalhesAcolhidoModal({ acolhido, onFechar }) {
         </section>
 
         <section className="detalhes-secao">
-          <h4 className="detalhes-secao-titulo">Remédios prescritos</h4>
-          {remedios.length > 0 ? (
-            <ul className="detalhes-remedios">
-              {remedios.map((r, i) => {
-                const nome = typeof r === 'object' ? r?.nome ?? '-' : r;
-                const desc =
-                  typeof r === 'object' && r?.descricao ? String(r.descricao).trim() : '';
-                const chave = typeof r === 'object' ? r?.id ?? `${nome}-${i}` : `${r}-${i}`;
+          <h4 className="detalhes-secao-titulo">Medicamentos prescritos</h4>
+          {prescricoes.length > 0 ? (
+            <ul className="detalhes-medicamentos">
+              {prescricoes.map((p, i) => {
+                const nome = p?.medicamentoNome ?? '-';
+                const desc = p?.medicamentoDescricao
+                  ? String(p.medicamentoDescricao).trim()
+                  : '';
+                const chave = p?.id ?? p?.medicamentoId ?? `${nome}-${i}`;
                 return (
                   <li key={chave}>
-                    <span className="detalhes-remedio-nome">{nome}</span>
+                    <span className="detalhes-medicamento-nome">{nome}</span>
                     {desc ? (
-                      <span className="detalhes-remedio-descricao">{desc}</span>
+                      <span className="detalhes-medicamento-descricao">{desc}</span>
                     ) : null}
+                    <span className="detalhes-medicamento-dose">{resumoDose(p)}</span>
                   </li>
                 );
               })}
             </ul>
           ) : (
-            <p className="detalhes-vazio">Nenhum remédio prescrito.</p>
+            <p className="detalhes-vazio">Nenhum medicamento prescrito.</p>
           )}
         </section>
 
@@ -134,6 +174,7 @@ export default function DetalhesAcolhidoModal({ acolhido, onFechar }) {
           <Campo label="Cadastrado em" valor={formatarDataHora(acolhido.criadoEm)} />
           <Campo label="Última atualização" valor={formatarDataHora(acolhido.atualizadoEm)} />
         </section>
+        </div>
 
         <div className="modal-acoes detalhes-acoes">
           <button

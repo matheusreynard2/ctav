@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import InputArquivoCustomizado from './InputArquivoCustomizado.jsx';
+import { TIPOS_ALTA } from '../utils/altas';
 import {
   dataParaIso,
   isoParaData,
@@ -7,16 +9,41 @@ import {
   maskData,
 } from '../utils/masks';
 
+const TIPOS_ANEXO = [
+  { valor: 'ATESTADO', rotulo: 'Atestado' },
+  { valor: 'RECEITA', rotulo: 'Receita' },
+  { valor: 'DOCUMENTO', rotulo: 'Documento' },
+  { valor: 'OUTRO', rotulo: 'Outro' },
+];
+
+const ANEXO_ACCEPT =
+  '.pdf,.jpg,.jpeg,.png,.xlsx,application/pdf,image/jpeg,image/png,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const ANEXO_TAMANHO_MAX = 10 * 1024 * 1024; // 10 MB (espelha o backend)
+const FOTO_ACCEPT = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
+const FOTO_TIPOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp'];
+
+const rotuloTipoAnexo = (tipo) =>
+  TIPOS_ANEXO.find((t) => t.valor === tipo)?.rotulo ?? tipo;
+
+const nomePadraoArquivo = (nomeArquivo) => {
+  if (!nomeArquivo) return '';
+  const ponto = nomeArquivo.lastIndexOf('.');
+  return ponto > 0 ? nomeArquivo.substring(0, ponto) : nomeArquivo;
+};
+
 const FORM_INICIAL = {
   nome: '',
   cpf: '',
   dataNascimento: '',
   dataAcolhimentoCtav: '',
-  dataSaidaCtav: '',
   email: '',
   telefone: '',
   sexo: '',
   endereco: '',
+  quarto: '',
+  alta: false,
+  dataAlta: '',
+  tipoAlta: '',
 };
 
 const hojeComoIso = () => {
@@ -27,7 +54,7 @@ const hojeComoIso = () => {
   return `${y}-${m}-${dia}`;
 };
 
-const truncarDescricaoRemedio = (texto, max = 72) => {
+const truncarDescricao = (texto, max = 72) => {
   if (!texto) return '';
   const t = String(texto).trim();
   if (t.length <= max) return t;
@@ -36,16 +63,74 @@ const truncarDescricaoRemedio = (texto, max = 72) => {
 
 export default function AcolhidoForm({
   acolhidoEditando,
-  remediosDisponiveis = [],
+  medicamentosDisponiveis = [],
   onSalvar,
   onCancelar,
+  onVerLista,
   salvando,
 }) {
   const [form, setForm] = useState(FORM_INICIAL);
-  const [remediosSelecionadosIds, setRemediosSelecionadosIds] = useState([]);
+  const [medicamentosSelecionadosIds, setMedicamentosSelecionadosIds] = useState([]);
   const [destaqueDisponivel, setDestaqueDisponivel] = useState(null);
   const [destaqueSelecionado, setDestaqueSelecionado] = useState(null);
   const [erros, setErros] = useState({});
+  const [anexosPendentes, setAnexosPendentes] = useState([]);
+  const [anexoTipo, setAnexoTipo] = useState('DOCUMENTO');
+  const [anexoNome, setAnexoNome] = useState('');
+  const [anexoArquivo, setAnexoArquivo] = useState(null);
+  const anexoInputRef = useRef(null);
+  const anexosPendentesRef = useRef([]);
+
+  const [fotoArquivo, setFotoArquivo] = useState(null);
+  const [fotoPreview, setFotoPreview] = useState('');
+  const [fotoRemovida, setFotoRemovida] = useState(false);
+  const fotoInputRef = useRef(null);
+  const fotoPreviewRef = useRef('');
+
+  useEffect(() => {
+    anexosPendentesRef.current = anexosPendentes;
+  }, [anexosPendentes]);
+
+  useEffect(() => {
+    fotoPreviewRef.current = fotoPreview;
+  }, [fotoPreview]);
+
+  // revoga a URL de pré-visualização da foto ao desmontar
+  useEffect(
+    () => () => {
+      if (fotoPreviewRef.current) URL.revokeObjectURL(fotoPreviewRef.current);
+    },
+    []
+  );
+
+  // revoga as URLs de pré-visualização ao desmontar
+  useEffect(
+    () => () => {
+      anexosPendentesRef.current.forEach((a) => {
+        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+      });
+    },
+    []
+  );
+
+  const limparAnexosPendentes = () => {
+    anexosPendentesRef.current.forEach((a) => {
+      if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+    });
+    setAnexosPendentes([]);
+    setAnexoTipo('DOCUMENTO');
+    setAnexoNome('');
+    setAnexoArquivo(null);
+    if (anexoInputRef.current) anexoInputRef.current.value = '';
+  };
+
+  const limparFoto = () => {
+    if (fotoPreviewRef.current) URL.revokeObjectURL(fotoPreviewRef.current);
+    setFotoArquivo(null);
+    setFotoPreview('');
+    setFotoRemovida(false);
+    if (fotoInputRef.current) fotoInputRef.current.value = '';
+  };
 
   useEffect(() => {
     if (acolhidoEditando) {
@@ -54,74 +139,112 @@ export default function AcolhidoForm({
         cpf: maskCpf(acolhidoEditando.cpf ?? ''),
         dataNascimento: isoParaData(acolhidoEditando.dataNascimento),
         dataAcolhimentoCtav: isoParaData(acolhidoEditando.dataAcolhimentoCtav),
-        dataSaidaCtav: isoParaData(acolhidoEditando.dataSaidaCtav),
         email: acolhidoEditando.email ?? '',
         telefone: maskCelular(acolhidoEditando.telefone ?? ''),
         sexo: acolhidoEditando.sexo ?? '',
         endereco: acolhidoEditando.endereco ?? '',
+        quarto: acolhidoEditando.quarto ?? '',
+        alta: Boolean(acolhidoEditando.alta),
+        dataAlta: isoParaData(acolhidoEditando.dataAlta),
+        tipoAlta: acolhidoEditando.tipoAlta ?? '',
       });
-      const ids = Array.isArray(acolhidoEditando.remedios_prescritos)
-        ? acolhidoEditando.remedios_prescritos
-            .map((r) => (typeof r === 'object' ? r?.id : null))
+      const ids = Array.isArray(acolhidoEditando.prescricoes)
+        ? acolhidoEditando.prescricoes
+            .map((p) => p?.medicamentoId)
             .filter((id) => id != null)
         : [];
-      setRemediosSelecionadosIds(ids);
+      setMedicamentosSelecionadosIds(ids);
     } else {
       setForm(FORM_INICIAL);
-      setRemediosSelecionadosIds([]);
+      setMedicamentosSelecionadosIds([]);
     }
     setDestaqueDisponivel(null);
     setDestaqueSelecionado(null);
     setErros({});
+    limparAnexosPendentes();
+    limparFoto();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acolhidoEditando]);
 
-  const remediosDisponiveisOrdenados = useMemo(
-    () => [...remediosDisponiveis].sort((a, b) => a.nome.localeCompare(b.nome)),
-    [remediosDisponiveis]
+  const medicamentosDisponiveisOrdenados = useMemo(
+    () => [...medicamentosDisponiveis].sort((a, b) => a.nome.localeCompare(b.nome)),
+    [medicamentosDisponiveis]
   );
 
-  const remediosNaoSelecionados = useMemo(
+  const medicamentosNaoSelecionados = useMemo(
     () =>
-      remediosDisponiveisOrdenados.filter(
-        (r) => !remediosSelecionadosIds.includes(r.id)
+      medicamentosDisponiveisOrdenados.filter(
+        (m) => !medicamentosSelecionadosIds.includes(m.id)
       ),
-    [remediosDisponiveisOrdenados, remediosSelecionadosIds]
+    [medicamentosDisponiveisOrdenados, medicamentosSelecionadosIds]
   );
 
-  const remediosSelecionados = useMemo(() => {
-    const mapa = new Map(remediosDisponiveisOrdenados.map((r) => [r.id, r]));
-    return remediosSelecionadosIds
+  const medicamentosSelecionados = useMemo(() => {
+    const mapa = new Map(medicamentosDisponiveisOrdenados.map((m) => [m.id, m]));
+    return medicamentosSelecionadosIds
       .map((id) => mapa.get(id))
       .filter(Boolean);
-  }, [remediosDisponiveisOrdenados, remediosSelecionadosIds]);
+  }, [medicamentosDisponiveisOrdenados, medicamentosSelecionadosIds]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    let novoValor = value;
+    const { name, value, type, checked } = e.target;
+
+    if (name === 'alta') {
+      setForm((atual) => ({
+        ...atual,
+        alta: checked,
+        // ao desmarcar a alta, limpa a data e o tipo informados
+        dataAlta: checked ? atual.dataAlta : '',
+        tipoAlta: checked ? atual.tipoAlta : '',
+      }));
+      if (!checked) {
+        setErros((atual) => {
+          const copia = { ...atual };
+          delete copia.dataAlta;
+          delete copia.tipoAlta;
+          return copia;
+        });
+      }
+      return;
+    }
+
+    let novoValor = type === 'checkbox' ? checked : value;
 
     if (name === 'cpf') novoValor = maskCpf(value);
     else if (name === 'telefone') novoValor = maskCelular(value);
     else if (
       name === 'dataNascimento' ||
       name === 'dataAcolhimentoCtav' ||
-      name === 'dataSaidaCtav'
+      name === 'dataAlta'
     )
       novoValor = maskData(value);
 
     setForm((atual) => ({ ...atual, [name]: novoValor }));
   };
 
-  const incluirRemedio = (id) => {
+  const incluirMedicamento = (id) => {
     if (id == null) return;
-    setRemediosSelecionadosIds((atual) =>
+    setMedicamentosSelecionadosIds((atual) =>
       atual.includes(id) ? atual : [...atual, id]
     );
     setDestaqueDisponivel(null);
   };
 
-  const removerRemedio = (id) => {
+  const removerMedicamento = (id) => {
     if (id == null) return;
-    setRemediosSelecionadosIds((atual) => atual.filter((x) => x !== id));
+    setMedicamentosSelecionadosIds((atual) => atual.filter((x) => x !== id));
+    setDestaqueSelecionado(null);
+  };
+
+  const incluirTodosMedicamentos = () => {
+    setMedicamentosSelecionadosIds(
+      medicamentosDisponiveisOrdenados.map((m) => m.id)
+    );
+    setDestaqueDisponivel(null);
+  };
+
+  const removerTodosMedicamentos = () => {
+    setMedicamentosSelecionadosIds([]);
     setDestaqueSelecionado(null);
   };
 
@@ -161,26 +284,164 @@ export default function AcolhidoForm({
       }
     }
 
-    if (form.dataSaidaCtav.trim()) {
-      const isoSaida = dataParaIso(form.dataSaidaCtav);
-      if (!isoSaida) {
-        novosErros.dataSaidaCtav = 'Data inválida';
-      } else if (isoSaida > hoje) {
-        novosErros.dataSaidaCtav =
-          'A data não pode ser posterior à data atual';
-      }
-    }
-
     const telDigitos = form.telefone.replace(/\D/g, '');
     if (telDigitos && telDigitos.length !== 11) {
       novosErros.telefone = 'Celular deve ter DDD + 9 dígitos';
+    }
+
+    if (form.alta) {
+      if (!form.tipoAlta) {
+        novosErros.tipoAlta = 'Selecione o tipo da alta';
+      }
+      if (!form.dataAlta.trim()) {
+        novosErros.dataAlta = 'Informe a data da alta';
+      } else {
+        const isoAlta = dataParaIso(form.dataAlta);
+        if (!isoAlta) {
+          novosErros.dataAlta = 'Data inválida';
+        } else if (isoAlta > hoje) {
+          novosErros.dataAlta = 'A data não pode ser posterior à data atual';
+        } else {
+          const isoAcolhimento = dataParaIso(form.dataAcolhimentoCtav);
+          if (isoAcolhimento && isoAlta < isoAcolhimento) {
+            novosErros.dataAlta =
+              'A data da alta não pode ser anterior à data de acolhimento';
+          }
+        }
+      }
     }
 
     setErros(novosErros);
     return Object.keys(novosErros).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const preencherCadastroTeste = () => {
+    setForm({
+      nome: 'João da Silva Teste',
+      cpf: maskCpf('52998224725'),
+      dataNascimento: '15/05/1990',
+      dataAcolhimentoCtav: isoParaData(hojeComoIso()),
+      email: 'joao.teste@email.com',
+      telefone: maskCelular('11987654321'),
+      sexo: 'MASCULINO',
+      endereco: 'Rua das Flores, 123, Centro, São Paulo - SP',
+      quarto: '101',
+    });
+    setMedicamentosSelecionadosIds(
+      medicamentosDisponiveisOrdenados.slice(0, 2).map((m) => m.id)
+    );
+    setErros({});
+  };
+
+  const handleSelecionarFoto = (e) => {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) return;
+
+    if (!FOTO_TIPOS_PERMITIDOS.includes(file.type)) {
+      if (fotoInputRef.current) fotoInputRef.current.value = '';
+      setErros((atual) => ({
+        ...atual,
+        foto: 'A foto deve ser uma imagem JPG, PNG ou WEBP.',
+      }));
+      return;
+    }
+    if (file.size > ANEXO_TAMANHO_MAX) {
+      if (fotoInputRef.current) fotoInputRef.current.value = '';
+      setErros((atual) => ({ ...atual, foto: 'A imagem excede o limite de 10 MB.' }));
+      return;
+    }
+
+    if (fotoPreviewRef.current) URL.revokeObjectURL(fotoPreviewRef.current);
+    setFotoArquivo(file);
+    setFotoPreview(URL.createObjectURL(file));
+    setFotoRemovida(false);
+    setErros((atual) => {
+      const copia = { ...atual };
+      delete copia.foto;
+      return copia;
+    });
+  };
+
+  const handleRemoverFoto = () => {
+    if (fotoPreviewRef.current) URL.revokeObjectURL(fotoPreviewRef.current);
+    setFotoArquivo(null);
+    setFotoPreview('');
+    // Em edicao, marca para remover a foto existente no backend ao salvar.
+    setFotoRemovida(true);
+    if (fotoInputRef.current) fotoInputRef.current.value = '';
+  };
+
+  const handleSelecionarAnexo = (e) => {
+    const file = e.target.files?.[0] ?? null;
+    if (!file) {
+      setAnexoArquivo(null);
+      return;
+    }
+    if (file.size > ANEXO_TAMANHO_MAX) {
+      setAnexoArquivo(null);
+      if (anexoInputRef.current) anexoInputRef.current.value = '';
+      setErros((atual) => ({ ...atual, anexo: 'Arquivo excede o limite de 10 MB.' }));
+      return;
+    }
+    setAnexoArquivo(file);
+    setAnexoNome((atual) => atual.trim() || nomePadraoArquivo(file.name));
+    setErros((atual) => {
+      const copia = { ...atual };
+      delete copia.anexo;
+      return copia;
+    });
+  };
+
+  const handleAdicionarAnexoLista = (e) => {
+    if (e) e.preventDefault();
+    const nomeFinal = anexoNome.trim();
+    if (!nomeFinal || nomeFinal.length < 2) {
+      setErros((atual) => ({
+        ...atual,
+        anexo: 'Informe um nome para o anexo com pelo menos 2 caracteres.',
+      }));
+      return;
+    }
+    if (!anexoArquivo) {
+      setErros((atual) => ({
+        ...atual,
+        anexo: 'Selecione um arquivo (PDF, JPG, PNG ou Excel .xlsx).',
+      }));
+      return;
+    }
+
+    const ehImagem = anexoArquivo.type?.startsWith('image/');
+    setAnexosPendentes((atual) => [
+      ...atual,
+      {
+        localId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file: anexoArquivo,
+        tipo: anexoTipo,
+        nomeArquivo: nomeFinal,
+        ehImagem,
+        previewUrl: ehImagem ? URL.createObjectURL(anexoArquivo) : null,
+      },
+    ]);
+    setAnexoArquivo(null);
+    setAnexoNome('');
+    setAnexoTipo('DOCUMENTO');
+    if (anexoInputRef.current) anexoInputRef.current.value = '';
+    setErros((atual) => {
+      const copia = { ...atual };
+      delete copia.anexo;
+      return copia;
+    });
+  };
+
+  const removerAnexoPendente = (localId) => {
+    setAnexosPendentes((atual) => {
+      const alvo = atual.find((a) => a.localId === localId);
+      if (alvo?.previewUrl) URL.revokeObjectURL(alvo.previewUrl);
+      return atual.filter((a) => a.localId !== localId);
+    });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validar()) return;
 
@@ -189,27 +450,115 @@ export default function AcolhidoForm({
       cpf: form.cpf,
       dataNascimento: dataParaIso(form.dataNascimento),
       dataAcolhimentoCtav: dataParaIso(form.dataAcolhimentoCtav),
-      dataSaidaCtav: form.dataSaidaCtav.trim()
-        ? dataParaIso(form.dataSaidaCtav)
-        : null,
       email: form.email || null,
       telefone: form.telefone || null,
       sexo: form.sexo || null,
       endereco: form.endereco || null,
-      remedios_prescritos_ids: remediosSelecionadosIds.length
-        ? [...remediosSelecionadosIds]
-        : null,
+      quarto: form.quarto?.trim() ? form.quarto.trim() : null,
+      alta: form.alta,
+      dataAlta: form.alta && form.dataAlta.trim() ? dataParaIso(form.dataAlta) : null,
+      tipoAlta: form.alta && form.tipoAlta ? form.tipoAlta : null,
+      prescricoes: medicamentosSelecionadosIds.map((medicamentoId) => ({
+        medicamentoId,
+        doseManha: 0,
+        doseTarde: 0,
+        doseNoite: 0,
+      })),
     };
-    onSalvar(payload);
+
+    const foto = { file: fotoArquivo, remover: fotoRemovida };
+    const salvo = await onSalvar(payload, anexosPendentes, foto);
+
+    // ao cadastrar com sucesso, limpa o formulário, anexos pendentes e foto
+    if (salvo && !editando) {
+      limparAnexosPendentes();
+      limparFoto();
+      setForm(FORM_INICIAL);
+      setMedicamentosSelecionadosIds([]);
+    }
   };
 
   const editando = Boolean(acolhidoEditando);
 
+  const tipoAltaSelecionado = TIPOS_ALTA.find((t) => t.valor === form.tipoAlta);
+
+  const fotoExibida =
+    fotoPreview || (editando && !fotoRemovida ? acolhidoEditando?.fotoUrl ?? '' : '');
+
   return (
     <form className="card form" onSubmit={handleSubmit}>
-      <h2>{editando ? 'Editar acolhido' : 'Novo acolhido'}</h2>
+      <div className="form-cabecalho">
+        <h2>{editando ? 'Editar acolhido' : 'Novo acolhido'}</h2>
+        <div className="form-cabecalho-acoes">
+          {!editando && (
+            <button
+              type="button"
+              className="btn btn-secundario"
+              onClick={preencherCadastroTeste}
+            >
+              Preencher cadastro
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-secundario btn-novo"
+            onClick={onVerLista}
+            title="Ver lista de acolhidos"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+            Ver lista
+          </button>
+        </div>
+      </div>
 
       <div className="grid">
+        <div className="campo campo-largo">
+          <label>Foto do acolhido</label>
+          <div className="foto-upload">
+            <div className="foto-miniatura">
+              {fotoExibida ? (
+                <img src={fotoExibida} alt="Foto do acolhido" />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              )}
+            </div>
+            <div className="foto-upload-acoes">
+              <InputArquivoCustomizado
+                id="acolhido-foto"
+                inputRef={fotoInputRef}
+                accept={FOTO_ACCEPT}
+                onChange={handleSelecionarFoto}
+                nomeArquivoSelecionado={fotoArquivo?.name ?? ''}
+                textoBotao={fotoExibida ? 'Trocar foto' : 'Selecionar foto'}
+                textoVazio="Nenhuma foto selecionada"
+              />
+              {fotoExibida && (
+                <button
+                  type="button"
+                  className="btn btn-secundario btn-perigo-texto"
+                  onClick={handleRemoverFoto}
+                >
+                  Remover foto
+                </button>
+              )}
+              <span className="campo-ajuda">
+                Imagem JPG, PNG ou WEBP, até 10 MB.
+              </span>
+              {erros.foto && <span className="erro">{erros.foto}</span>}
+            </div>
+          </div>
+        </div>
+
         <div className="campo">
           <label htmlFor="nome">Nome *</label>
           <input
@@ -269,22 +618,6 @@ export default function AcolhidoForm({
         </div>
 
         <div className="campo">
-          <label htmlFor="dataSaidaCtav" title="Data em que o acolhido sai ou recebe alta da instituição">
-            Data de saída / alta na CTAV
-          </label>
-          <input
-            id="dataSaidaCtav"
-            name="dataSaidaCtav"
-            value={form.dataSaidaCtav}
-            onChange={handleChange}
-            placeholder="dd/mm/aaaa (opcional)"
-            inputMode="numeric"
-            maxLength={10}
-          />
-          {erros.dataSaidaCtav && <span className="erro">{erros.dataSaidaCtav}</span>}
-        </div>
-
-        <div className="campo">
           <label htmlFor="sexo">Sexo</label>
           <select id="sexo" name="sexo" value={form.sexo} onChange={handleChange}>
             <option value="">Selecione...</option>
@@ -320,6 +653,19 @@ export default function AcolhidoForm({
           {erros.telefone && <span className="erro">{erros.telefone}</span>}
         </div>
 
+        <div className="campo">
+          <label htmlFor="quarto">Quarto</label>
+          <input
+            id="quarto"
+            name="quarto"
+            value={form.quarto}
+            onChange={handleChange}
+            placeholder="Ex.: 101"
+            maxLength={20}
+          />
+          {erros.quarto && <span className="erro">{erros.quarto}</span>}
+        </div>
+
         <div className="campo campo-largo">
           <label htmlFor="endereco">Endereço</label>
           <input
@@ -331,34 +677,90 @@ export default function AcolhidoForm({
           />
         </div>
 
+        {editando && (
+          <div className="campo campo-largo">
+            <label className="campo-check">
+              <input
+                type="checkbox"
+                name="alta"
+                checked={form.alta}
+                onChange={handleChange}
+              />
+              <span>Alta</span>
+            </label>
+            <span className="campo-ajuda">
+              Marque se o acolhido recebeu alta e informe a data correspondente.
+            </span>
+          </div>
+        )}
+
+        {editando && form.alta && (
+          <div className="campo">
+            <label htmlFor="dataAlta">Data da alta *</label>
+            <input
+              id="dataAlta"
+              name="dataAlta"
+              value={form.dataAlta}
+              onChange={handleChange}
+              placeholder="dd/mm/aaaa"
+              inputMode="numeric"
+              maxLength={10}
+            />
+            {erros.dataAlta && <span className="erro">{erros.dataAlta}</span>}
+          </div>
+        )}
+
+        {editando && form.alta && (
+          <div className="campo">
+            <label htmlFor="tipoAlta">Tipo de alta *</label>
+            <select
+              id="tipoAlta"
+              name="tipoAlta"
+              value={form.tipoAlta}
+              onChange={handleChange}
+            >
+              <option value="">Selecione...</option>
+              {TIPOS_ALTA.map((t) => (
+                <option key={t.valor} value={t.valor}>
+                  {t.rotulo}
+                </option>
+              ))}
+            </select>
+            {erros.tipoAlta && <span className="erro">{erros.tipoAlta}</span>}
+            {tipoAltaSelecionado && (
+              <span className="campo-ajuda">{tipoAltaSelecionado.descricao}</span>
+            )}
+          </div>
+        )}
+
         <div className="campo campo-largo">
-          <label>Remédios prescritos</label>
+          <label>Medicamentos prescritos</label>
           <div className="dual-list">
             <div className="dual-list-coluna">
-              <span className="dual-list-titulo">Remédios disponíveis</span>
+              <span className="dual-list-titulo">Medicamentos disponíveis</span>
               <ul className="dual-list-caixa" role="listbox">
-                {remediosNaoSelecionados.length === 0 ? (
+                {medicamentosNaoSelecionados.length === 0 ? (
                   <li className="dual-list-vazio">
-                    {remediosDisponiveis.length === 0
-                      ? 'Nenhum remédio cadastrado.'
+                    {medicamentosDisponiveis.length === 0
+                      ? 'Nenhum medicamento cadastrado.'
                       : 'Todos já foram incluídos.'}
                   </li>
                 ) : (
-                  remediosNaoSelecionados.map((r) => (
+                  medicamentosNaoSelecionados.map((m) => (
                     <li
-                      key={r.id}
+                      key={m.id}
                       role="option"
-                      aria-selected={destaqueDisponivel === r.id}
+                      aria-selected={destaqueDisponivel === m.id}
                       className={`dual-list-item ${
-                        destaqueDisponivel === r.id ? 'destaque' : ''
+                        destaqueDisponivel === m.id ? 'destaque' : ''
                       }`}
-                      onClick={() => setDestaqueDisponivel(r.id)}
-                      onDoubleClick={() => incluirRemedio(r.id)}
+                      onClick={() => setDestaqueDisponivel(m.id)}
+                      onDoubleClick={() => incluirMedicamento(m.id)}
                     >
-                      <span className="dual-list-item-titulo">{r.nome}</span>
-                      {r.descricao ? (
-                        <span className="dual-list-item-sub" title={r.descricao}>
-                          {truncarDescricaoRemedio(r.descricao)}
+                      <span className="dual-list-item-titulo">{m.nome}</span>
+                      {m.descricao ? (
+                        <span className="dual-list-item-sub" title={m.descricao}>
+                          {truncarDescricao(m.descricao)}
                         </span>
                       ) : null}
                     </li>
@@ -370,10 +772,20 @@ export default function AcolhidoForm({
             <div className="dual-list-acoes">
               <button
                 type="button"
+                className="btn btn-secundario btn-seta btn-seta-dupla"
+                onClick={incluirTodosMedicamentos}
+                disabled={medicamentosNaoSelecionados.length === 0}
+                aria-label="Incluir todos os medicamentos"
+                title="Incluir todos"
+              >
+                &gt;&gt;
+              </button>
+              <button
+                type="button"
                 className="btn btn-secundario btn-seta"
-                onClick={() => incluirRemedio(destaqueDisponivel)}
+                onClick={() => incluirMedicamento(destaqueDisponivel)}
                 disabled={destaqueDisponivel == null}
-                aria-label="Incluir remédio selecionado"
+                aria-label="Incluir medicamento selecionado"
                 title="Incluir"
               >
                 &gt;
@@ -381,36 +793,46 @@ export default function AcolhidoForm({
               <button
                 type="button"
                 className="btn btn-secundario btn-seta"
-                onClick={() => removerRemedio(destaqueSelecionado)}
+                onClick={() => removerMedicamento(destaqueSelecionado)}
                 disabled={destaqueSelecionado == null}
-                aria-label="Remover remédio selecionado"
+                aria-label="Remover medicamento selecionado"
                 title="Remover"
               >
                 &lt;
               </button>
+              <button
+                type="button"
+                className="btn btn-secundario btn-seta btn-seta-dupla"
+                onClick={removerTodosMedicamentos}
+                disabled={medicamentosSelecionados.length === 0}
+                aria-label="Remover todos os medicamentos"
+                title="Remover todos"
+              >
+                &lt;&lt;
+              </button>
             </div>
 
             <div className="dual-list-coluna">
-              <span className="dual-list-titulo">Remédios inclusos</span>
+              <span className="dual-list-titulo">Medicamentos inclusos</span>
               <ul className="dual-list-caixa" role="listbox">
-                {remediosSelecionados.length === 0 ? (
-                  <li className="dual-list-vazio">Nenhum remédio incluído.</li>
+                {medicamentosSelecionados.length === 0 ? (
+                  <li className="dual-list-vazio">Nenhum medicamento incluído.</li>
                 ) : (
-                  remediosSelecionados.map((r) => (
+                  medicamentosSelecionados.map((m) => (
                     <li
-                      key={r.id}
+                      key={m.id}
                       role="option"
-                      aria-selected={destaqueSelecionado === r.id}
+                      aria-selected={destaqueSelecionado === m.id}
                       className={`dual-list-item ${
-                        destaqueSelecionado === r.id ? 'destaque' : ''
+                        destaqueSelecionado === m.id ? 'destaque' : ''
                       }`}
-                      onClick={() => setDestaqueSelecionado(r.id)}
-                      onDoubleClick={() => removerRemedio(r.id)}
+                      onClick={() => setDestaqueSelecionado(m.id)}
+                      onDoubleClick={() => removerMedicamento(m.id)}
                     >
-                      <span className="dual-list-item-titulo">{r.nome}</span>
-                      {r.descricao ? (
-                        <span className="dual-list-item-sub" title={r.descricao}>
-                          {truncarDescricaoRemedio(r.descricao)}
+                      <span className="dual-list-item-titulo">{m.nome}</span>
+                      {m.descricao ? (
+                        <span className="dual-list-item-sub" title={m.descricao}>
+                          {truncarDescricao(m.descricao)}
                         </span>
                       ) : null}
                     </li>
@@ -419,7 +841,117 @@ export default function AcolhidoForm({
               </ul>
             </div>
           </div>
+          <span className="campo-ajuda">
+            As doses por período são definidas no Controle de administração,
+            em Medicamentos.
+          </span>
         </div>
+
+        {!editando && (
+          <div className="campo campo-largo">
+            <label>Anexos (opcional)</label>
+            <div className="anexo-upload">
+              <div className="anexo-upload-campos anexo-upload-campos-com-nome">
+                <div className="campo">
+                  <label htmlFor="cadastro-anexo-nome">Nome</label>
+                  <input
+                    id="cadastro-anexo-nome"
+                    type="text"
+                    value={anexoNome}
+                    onChange={(e) => setAnexoNome(e.target.value)}
+                    placeholder="Nome do anexo"
+                    maxLength={120}
+                  />
+                </div>
+                <div className="campo">
+                  <label htmlFor="cadastro-anexo-tipo">Tipo</label>
+                  <select
+                    id="cadastro-anexo-tipo"
+                    value={anexoTipo}
+                    onChange={(e) => setAnexoTipo(e.target.value)}
+                  >
+                    {TIPOS_ANEXO.map((t) => (
+                      <option key={t.valor} value={t.valor}>
+                        {t.rotulo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="campo">
+                  <label htmlFor="cadastro-anexo-arquivo">
+                    Arquivo (PDF, JPG, PNG ou Excel .xlsx — máx. 10 MB)
+                  </label>
+                  <InputArquivoCustomizado
+                    id="cadastro-anexo-arquivo"
+                    inputRef={anexoInputRef}
+                    accept={ANEXO_ACCEPT}
+                    onChange={handleSelecionarAnexo}
+                    nomeArquivoSelecionado={anexoArquivo?.name ?? ''}
+                  />
+                </div>
+              </div>
+              <div className="anexo-upload-acoes">
+                <button
+                  type="button"
+                  className="btn btn-secundario"
+                  onClick={handleAdicionarAnexoLista}
+                >
+                  Adicionar à lista
+                </button>
+              </div>
+            </div>
+            {erros.anexo && <span className="erro">{erros.anexo}</span>}
+            <span className="campo-ajuda">
+              Os anexos são enviados após o cadastro do acolhido.
+            </span>
+
+            {anexosPendentes.length > 0 && (
+              <ul className="anexos-thumbs">
+                {anexosPendentes.map((a) => (
+                  <li key={a.localId} className="anexo-thumb">
+                    <div className="anexo-thumb-preview">
+                      {a.ehImagem && a.previewUrl ? (
+                        <img src={a.previewUrl} alt={a.nomeArquivo} />
+                      ) : (
+                        <span className="anexo-thumb-ext">
+                          {(a.file.name.split('.').pop() || 'arq').toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="anexo-thumb-info">
+                      <input
+                        type="text"
+                        className="anexo-thumb-nome-input"
+                        value={a.nomeArquivo}
+                        onChange={(e) =>
+                          setAnexosPendentes((atual) =>
+                            atual.map((x) =>
+                              x.localId === a.localId
+                                ? { ...x, nomeArquivo: e.target.value }
+                                : x
+                            )
+                          )
+                        }
+                        maxLength={120}
+                        aria-label="Nome do anexo"
+                      />
+                      <span className="anexo-tag">{rotuloTipoAnexo(a.tipo)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="anexo-thumb-remover"
+                      onClick={() => removerAnexoPendente(a.localId)}
+                      aria-label="Remover anexo"
+                      title="Remover"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="acoes">

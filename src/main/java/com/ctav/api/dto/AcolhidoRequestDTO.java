@@ -5,7 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
+import com.ctav.api.enums.TipoAlta;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -40,8 +42,6 @@ public class AcolhidoRequestDTO {
     @NotNull(message = "A data de acolhimento na CTAV é obrigatória")
     private LocalDate dataAcolhimentoCtav;
 
-    private LocalDate dataSaidaCtav;
-
     @Email(message = "Email inválido")
     @Size(max = 120)
     private String email;
@@ -54,5 +54,15 @@ public class AcolhidoRequestDTO {
     @Size(max = 200)
     private String endereco;
 
-    private List<Long> remedios_prescritos_ids;
+    @Size(max = 20, message = "O quarto deve ter no máximo 20 caracteres")
+    private String quarto;
+
+    private Boolean alta;
+
+    private LocalDate dataAlta;
+
+    private TipoAlta tipoAlta;
+
+    @Valid
+    private List<PrescricaoRequestDTO> prescricoes;
 }

@@ -1,6 +1,7 @@
 package com.ctav.api.dto;
 
 import com.ctav.api.entity.Acolhido;
+import com.ctav.api.enums.TipoAlta;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,20 +24,28 @@ public class AcolhidoResponseDTO {
     private String cpf;
     private LocalDate dataNascimento;
     private LocalDate dataAcolhimentoCtav;
-    private LocalDate dataSaidaCtav;
     private String email;
     private String telefone;
     private String sexo;
     private String endereco;
-    private List<RemedioResponseDTO> remedios_prescritos;
+    private String quarto;
+    private Boolean alta;
+    private LocalDate dataAlta;
+    private TipoAlta tipoAlta;
+    // Rotulo amigavel do tipo de alta (ex.: "Alta por conclusão").
+    private String tipoAltaRotulo;
+    private String descricaoAlta;
+    // URL pre-assinada (temporaria) para exibir a foto; null quando nao ha foto.
+    private String fotoUrl;
+    private List<PrescricaoResponseDTO> prescricoes;
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
 
     public static AcolhidoResponseDTO fromEntity(Acolhido acolhido) {
-        List<RemedioResponseDTO> remedios = acolhido.getRemedios_prescritos() == null
+        List<PrescricaoResponseDTO> prescricoes = acolhido.getPrescricoes() == null
                 ? List.of()
-                : acolhido.getRemedios_prescritos().stream()
-                        .map(RemedioResponseDTO::fromEntity)
+                : acolhido.getPrescricoes().stream()
+                        .map(PrescricaoResponseDTO::fromEntity)
                         .toList();
 
         return AcolhidoResponseDTO.builder()
@@ -45,12 +54,19 @@ public class AcolhidoResponseDTO {
                 .cpf(acolhido.getCpf())
                 .dataNascimento(acolhido.getDataNascimento())
                 .dataAcolhimentoCtav(acolhido.getDataAcolhimentoCtav())
-                .dataSaidaCtav(acolhido.getDataSaidaCtav())
                 .email(acolhido.getEmail())
                 .telefone(acolhido.getTelefone())
                 .sexo(acolhido.getSexo())
                 .endereco(acolhido.getEndereco())
-                .remedios_prescritos(remedios)
+                .quarto(acolhido.getQuarto())
+                .alta(acolhido.getAlta())
+                .dataAlta(acolhido.getDataAlta())
+                .tipoAlta(acolhido.getTipoAlta())
+                .tipoAltaRotulo(acolhido.getTipoAlta() != null
+                        ? acolhido.getTipoAlta().getRotulo()
+                        : null)
+                .descricaoAlta(acolhido.getDescricaoAlta())
+                .prescricoes(prescricoes)
                 .criadoEm(acolhido.getCriadoEm())
                 .atualizadoEm(acolhido.getAtualizadoEm())
                 .build();

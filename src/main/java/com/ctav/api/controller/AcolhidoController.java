@@ -3,53 +3,73 @@ package com.ctav.api.controller;
 import com.ctav.api.dto.AcolhidoRequestDTO;
 import com.ctav.api.dto.AcolhidoResponseDTO;
 import com.ctav.api.service.AcolhidoService;
+
+import jakarta.inject.Inject;
 import jakarta.validation.Valid;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import java.util.List;
+import org.jboss.resteasy.reactive.RestForm;
+import org.jboss.resteasy.reactive.multipart.FileUpload;
 
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-@RestController
-@RequestMapping("/api/acolhidos")
-@RequiredArgsConstructor
+@Path("/api/acolhidos")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
 public class AcolhidoController {
 
-    private final AcolhidoService acolhidoService;
+    @Inject
+    AcolhidoService acolhidoService;
 
-    @PostMapping
-    public ResponseEntity<AcolhidoResponseDTO> criar(@Valid @RequestBody AcolhidoRequestDTO dto) {
+    @POST
+    public Response criar(@Valid AcolhidoRequestDTO dto) {
         AcolhidoResponseDTO criado = acolhidoService.criar(dto);
-        return ResponseEntity.ok().body(criado);
+        return Response.ok(criado).build();
     }
 
-    @GetMapping
-    public ResponseEntity<List<AcolhidoResponseDTO>> listar() {
-        return ResponseEntity.ok(acolhidoService.listar());
+    @GET
+    public Response listar() {
+        List<AcolhidoResponseDTO> lista = acolhidoService.listar();
+        return Response.ok(lista).build();
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<AcolhidoResponseDTO> buscarPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(acolhidoService.buscarPorId(id));
+    @GET
+    @Path("/{id}")
+    public Response buscarPorId(@PathParam("id") Long id) {
+        return Response.ok(acolhidoService.buscarPorId(id)).build();
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<AcolhidoResponseDTO> atualizar(
-            @PathVariable Long id,
-            @Valid @RequestBody AcolhidoRequestDTO dto) {
-        return ResponseEntity.ok(acolhidoService.atualizar(id, dto));
+    @PUT
+    @Path("/{id}")
+    public Response atualizar(@PathParam("id") Long id, @Valid AcolhidoRequestDTO dto) {
+        return Response.ok(acolhidoService.atualizar(id, dto)).build();
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletar(@PathVariable Long id) {
+    @DELETE
+    @Path("/{id}")
+    public Response deletar(@PathParam("id") Long id) {
         acolhidoService.deletar(id);
-        return ResponseEntity.noContent().build();
+        return Response.noContent().build();
+    }
+
+    @POST
+    @Path("/{id}/foto")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    public Response enviarFoto(@PathParam("id") Long id,
+                               @RestForm("arquivo") FileUpload arquivo) {
+        return Response.ok(acolhidoService.salvarFoto(id, arquivo)).build();
+    }
+
+    @DELETE
+    @Path("/{id}/foto")
+    public Response removerFoto(@PathParam("id") Long id) {
+        return Response.ok(acolhidoService.removerFoto(id)).build();
     }
 }
