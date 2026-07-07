@@ -8,9 +8,9 @@ public enum TipoAlta {
     ADMINISTRATIVA(
             "Alta administrativa",
             "Consideramos alta administrativa quando o acolhido infringe uma das normas do regimento interno, bem como agressões físicas e furto, e por esse motivo é impedido de permanecer na comunidade."),
-    ABANDONO(
-            "Alta por abandono",
-            "Consideramos abandono quando o acolhido, por vontade própria, decide interromper o tratamento em qualquer momento."),
+    DESISTENCIA(
+            "Alta por desistência",
+            "Consideramos desistência quando o acolhido, por vontade própria, decide interromper o tratamento em qualquer momento."),
     RECAIDA(
             "Alta por recaída",
             "Consideramos recaída quando o desligamento ocorre em razão do uso de substâncias psicoativas durante o período de acolhimento.");

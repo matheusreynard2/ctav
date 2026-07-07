@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import InputArquivoCustomizado from './InputArquivoCustomizado.jsx';
 import { TIPOS_ALTA } from '../utils/altas';
+import { TIPOS_COMBINADO, TIPO_RESSOCIALIZACAO } from '../utils/combinados';
 import {
   dataParaIso,
   isoParaData,
@@ -44,6 +45,8 @@ const FORM_INICIAL = {
   alta: false,
   dataAlta: '',
   tipoAlta: '',
+  motivoAdesaoId: '',
+  motivoDesistenciaId: '',
 };
 
 const hojeComoIso = () => {
@@ -64,16 +67,35 @@ const truncarDescricao = (texto, max = 72) => {
 export default function AcolhidoForm({
   acolhidoEditando,
   medicamentosDisponiveis = [],
+  motivosAdesao = [],
+  motivosDesistencia = [],
+  modoHistorico = false,
   onSalvar,
   onCancelar,
   onVerLista,
   salvando,
 }) {
+  const editando = Boolean(acolhidoEditando);
+  // Doses por período, combinados e anexos ficam disponíveis tanto no cadastro
+  // quanto na edição, deixando o formulário de edição tão completo quanto o de
+  // cadastro. Na edição, as doses vêm pré-carregadas da prescrição atual.
+  const permitirDosesECombinados = true;
+
+  const [abaAtiva, setAbaAtiva] = useState('gerais');
   const [form, setForm] = useState(FORM_INICIAL);
   const [medicamentosSelecionadosIds, setMedicamentosSelecionadosIds] = useState([]);
+  const [dosesPorMedicamento, setDosesPorMedicamento] = useState({});
   const [destaqueDisponivel, setDestaqueDisponivel] = useState(null);
   const [destaqueSelecionado, setDestaqueSelecionado] = useState(null);
   const [erros, setErros] = useState({});
+
+  // Combinados a serem criados junto ao acolhido (somente no cadastro no histórico).
+  const [combinadosPendentes, setCombinadosPendentes] = useState([]);
+  const [combinadoTipo, setCombinadoTipo] = useState('');
+  const [combinadoDescricao, setCombinadoDescricao] = useState('');
+  const [combinadoDataIda, setCombinadoDataIda] = useState('');
+  const [combinadoDataVolta, setCombinadoDataVolta] = useState('');
+  const [combinadoData, setCombinadoData] = useState('');
   const [anexosPendentes, setAnexosPendentes] = useState([]);
   const [anexoTipo, setAnexoTipo] = useState('DOCUMENTO');
   const [anexoNome, setAnexoNome] = useState('');
@@ -147,20 +169,46 @@ export default function AcolhidoForm({
         alta: Boolean(acolhidoEditando.alta),
         dataAlta: isoParaData(acolhidoEditando.dataAlta),
         tipoAlta: acolhidoEditando.tipoAlta ?? '',
+        motivoAdesaoId:
+          acolhidoEditando.motivoAdesaoId != null
+            ? String(acolhidoEditando.motivoAdesaoId)
+            : '',
+        motivoDesistenciaId:
+          acolhidoEditando.motivoDesistenciaId != null
+            ? String(acolhidoEditando.motivoDesistenciaId)
+            : '',
       });
-      const ids = Array.isArray(acolhidoEditando.prescricoes)
-        ? acolhidoEditando.prescricoes
-            .map((p) => p?.medicamentoId)
-            .filter((id) => id != null)
+      const prescricoes = Array.isArray(acolhidoEditando.prescricoes)
+        ? acolhidoEditando.prescricoes.filter((p) => p?.medicamentoId != null)
         : [];
-      setMedicamentosSelecionadosIds(ids);
+      setMedicamentosSelecionadosIds(prescricoes.map((p) => p.medicamentoId));
+      // Pré-carrega as doses atuais para que a aba Medicações reflita a
+      // prescrição existente (e não zere as doses ao salvar).
+      const doses = {};
+      prescricoes.forEach((p) => {
+        doses[p.medicamentoId] = {
+          manha: p.doseManha ?? 0,
+          tarde: p.doseTarde ?? 0,
+          noite: p.doseNoite ?? 0,
+        };
+      });
+      setDosesPorMedicamento(doses);
     } else {
-      setForm(FORM_INICIAL);
+      // No cadastro direto no histórico, a alta já entra marcada.
+      setForm(modoHistorico ? { ...FORM_INICIAL, alta: true } : FORM_INICIAL);
       setMedicamentosSelecionadosIds([]);
+      setDosesPorMedicamento({});
     }
+    setCombinadosPendentes([]);
+    setCombinadoTipo('');
+    setCombinadoDescricao('');
+    setCombinadoDataIda('');
+    setCombinadoDataVolta('');
+    setCombinadoData('');
     setDestaqueDisponivel(null);
     setDestaqueSelecionado(null);
     setErros({});
+    setAbaAtiva('gerais');
     limparAnexosPendentes();
     limparFoto();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,15 +241,36 @@ export default function AcolhidoForm({
       setForm((atual) => ({
         ...atual,
         alta: checked,
-        // ao desmarcar a alta, limpa a data e o tipo informados
+        // ao desmarcar a alta, limpa a data, o tipo e o motivo de desistência
         dataAlta: checked ? atual.dataAlta : '',
         tipoAlta: checked ? atual.tipoAlta : '',
+        motivoDesistenciaId: checked ? atual.motivoDesistenciaId : '',
       }));
       if (!checked) {
         setErros((atual) => {
           const copia = { ...atual };
           delete copia.dataAlta;
           delete copia.tipoAlta;
+          delete copia.motivoDesistenciaId;
+          return copia;
+        });
+      }
+      return;
+    }
+
+    // Ao mudar o tipo de alta para algo diferente de desistência, o motivo de
+    // desistência deixa de fazer sentido.
+    if (name === 'tipoAlta') {
+      setForm((atual) => ({
+        ...atual,
+        tipoAlta: value,
+        motivoDesistenciaId:
+          value === 'DESISTENCIA' ? atual.motivoDesistenciaId : '',
+      }));
+      if (value !== 'DESISTENCIA') {
+        setErros((atual) => {
+          const copia = { ...atual };
+          delete copia.motivoDesistenciaId;
           return copia;
         });
       }
@@ -233,6 +302,11 @@ export default function AcolhidoForm({
   const removerMedicamento = (id) => {
     if (id == null) return;
     setMedicamentosSelecionadosIds((atual) => atual.filter((x) => x !== id));
+    setDosesPorMedicamento((atual) => {
+      const copia = { ...atual };
+      delete copia[id];
+      return copia;
+    });
     setDestaqueSelecionado(null);
   };
 
@@ -245,7 +319,83 @@ export default function AcolhidoForm({
 
   const removerTodosMedicamentos = () => {
     setMedicamentosSelecionadosIds([]);
+    setDosesPorMedicamento({});
     setDestaqueSelecionado(null);
+  };
+
+  const doseDoMedicamento = (id) =>
+    dosesPorMedicamento[id] ?? { manha: 0, tarde: 0, noite: 0 };
+
+  const atualizarDose = (id, periodo, valor) => {
+    const numero = Math.max(0, parseInt(valor, 10) || 0);
+    setDosesPorMedicamento((atual) => ({
+      ...atual,
+      [id]: { ...doseDoMedicamento(id), [periodo]: numero },
+    }));
+  };
+
+  const ehRessocializacaoCombinado = combinadoTipo === TIPO_RESSOCIALIZACAO;
+
+  const adicionarCombinado = () => {
+    const descricao = combinadoDescricao.trim();
+    const novosErros = {};
+    if (!combinadoTipo) novosErros.combinadoTipo = 'Selecione o tipo do combinado.';
+    if (!descricao || descricao.length < 2) {
+      novosErros.combinadoDescricao = 'Informe uma descrição com pelo menos 2 caracteres.';
+    }
+    let isoIda = null;
+    let isoVolta = null;
+    let isoData = null;
+    if (ehRessocializacaoCombinado) {
+      isoIda = dataParaIso(combinadoDataIda);
+      isoVolta = dataParaIso(combinadoDataVolta);
+      if (!isoIda) novosErros.combinadoDataIda = 'Informe uma data de ida válida.';
+      if (!isoVolta) novosErros.combinadoDataVolta = 'Informe uma data de volta válida.';
+      if (isoIda && isoVolta && isoVolta < isoIda) {
+        novosErros.combinadoDataVolta = 'A volta não pode ser anterior à ida.';
+      }
+    } else if (combinadoTipo) {
+      if (!combinadoData.trim()) {
+        novosErros.combinadoData = 'Informe a data do combinado.';
+      } else {
+        isoData = dataParaIso(combinadoData);
+        if (!isoData) novosErros.combinadoData = 'Data inválida.';
+      }
+    }
+    if (Object.keys(novosErros).length > 0) {
+      setErros((atual) => ({ ...atual, ...novosErros }));
+      return;
+    }
+
+    setCombinadosPendentes((atual) => [
+      ...atual,
+      {
+        localId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        tipo: combinadoTipo,
+        descricao,
+        dataIda: ehRessocializacaoCombinado ? isoIda : null,
+        dataVolta: ehRessocializacaoCombinado ? isoVolta : null,
+        dataCombinado: ehRessocializacaoCombinado ? null : isoData,
+      },
+    ]);
+    setCombinadoTipo('');
+    setCombinadoDescricao('');
+    setCombinadoDataIda('');
+    setCombinadoDataVolta('');
+    setCombinadoData('');
+    setErros((atual) => {
+      const copia = { ...atual };
+      delete copia.combinadoTipo;
+      delete copia.combinadoDescricao;
+      delete copia.combinadoDataIda;
+      delete copia.combinadoDataVolta;
+      delete copia.combinadoData;
+      return copia;
+    });
+  };
+
+  const removerCombinadoPendente = (localId) => {
+    setCombinadosPendentes((atual) => atual.filter((c) => c.localId !== localId));
   };
 
   const validar = () => {
@@ -289,9 +439,16 @@ export default function AcolhidoForm({
       novosErros.telefone = 'Celular deve ter DDD + 9 dígitos';
     }
 
+    if (!form.motivoAdesaoId) {
+      novosErros.motivoAdesaoId = 'Selecione o motivo de adesão';
+    }
+
     if (form.alta) {
       if (!form.tipoAlta) {
         novosErros.tipoAlta = 'Selecione o tipo da alta';
+      }
+      if (form.tipoAlta === 'DESISTENCIA' && !form.motivoDesistenciaId) {
+        novosErros.motivoDesistenciaId = 'Selecione o motivo da desistência';
       }
       if (!form.dataAlta.trim()) {
         novosErros.dataAlta = 'Informe a data da alta';
@@ -317,6 +474,7 @@ export default function AcolhidoForm({
 
   const preencherCadastroTeste = () => {
     setForm({
+      ...FORM_INICIAL,
       nome: 'João da Silva Teste',
       cpf: maskCpf('52998224725'),
       dataNascimento: '15/05/1990',
@@ -326,6 +484,7 @@ export default function AcolhidoForm({
       sexo: 'MASCULINO',
       endereco: 'Rua das Flores, 123, Centro, São Paulo - SP',
       quarto: '101',
+      motivoAdesaoId: motivosAdesao[0]?.id ? String(motivosAdesao[0].id) : '',
     });
     setMedicamentosSelecionadosIds(
       medicamentosDisponiveisOrdenados.slice(0, 2).map((m) => m.id)
@@ -443,7 +602,11 @@ export default function AcolhidoForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validar()) return;
+    if (!validar()) {
+      // Os campos validados ficam na aba "Informações gerais".
+      setAbaAtiva('gerais');
+      return;
+    }
 
     const payload = {
       nome: form.nome.trim(),
@@ -458,27 +621,69 @@ export default function AcolhidoForm({
       alta: form.alta,
       dataAlta: form.alta && form.dataAlta.trim() ? dataParaIso(form.dataAlta) : null,
       tipoAlta: form.alta && form.tipoAlta ? form.tipoAlta : null,
-      prescricoes: medicamentosSelecionadosIds.map((medicamentoId) => ({
-        medicamentoId,
-        doseManha: 0,
-        doseTarde: 0,
-        doseNoite: 0,
-      })),
+      motivoAdesaoId: form.motivoAdesaoId ? Number(form.motivoAdesaoId) : null,
+      motivoDesistenciaId:
+        form.alta && form.tipoAlta === 'DESISTENCIA' && form.motivoDesistenciaId
+          ? Number(form.motivoDesistenciaId)
+          : null,
+      prescricoes: medicamentosSelecionadosIds.map((medicamentoId) => {
+        const dose = doseDoMedicamento(medicamentoId);
+        return {
+          medicamentoId,
+          doseManha: permitirDosesECombinados ? dose.manha : 0,
+          doseTarde: permitirDosesECombinados ? dose.tarde : 0,
+          doseNoite: permitirDosesECombinados ? dose.noite : 0,
+        };
+      }),
     };
 
+    // No cadastro direto no histórico, o acolhido já entra arquivado.
+    // Em edição, o campo é omitido para preservar o estado atual.
+    if (!editando && modoHistorico) {
+      payload.arquivado = true;
+    }
+
     const foto = { file: fotoArquivo, remover: fotoRemovida };
-    const salvo = await onSalvar(payload, anexosPendentes, foto);
+    const combinados = permitirDosesECombinados ? combinadosPendentes : [];
+    const salvo = await onSalvar(payload, anexosPendentes, foto, combinados);
 
     // ao cadastrar com sucesso, limpa o formulário, anexos pendentes e foto
     if (salvo && !editando) {
       limparAnexosPendentes();
       limparFoto();
-      setForm(FORM_INICIAL);
+      setForm(modoHistorico ? { ...FORM_INICIAL, alta: true } : FORM_INICIAL);
       setMedicamentosSelecionadosIds([]);
+      setDosesPorMedicamento({});
+      setCombinadosPendentes([]);
     }
   };
 
-  const editando = Boolean(acolhidoEditando);
+  // A seção de alta aparece na edição e também no cadastro direto no histórico
+  // (pessoas que já passaram pela comunidade normalmente têm uma alta registrada).
+  const mostrarAlta = editando || modoHistorico;
+
+  const abas = useMemo(
+    () => [
+      { id: 'gerais', rotulo: 'Informações gerais' },
+      { id: 'medicacoes', rotulo: 'Medicações' },
+      { id: 'combinados', rotulo: 'Combinados' },
+      { id: 'anexos', rotulo: 'Anexos' },
+    ],
+    []
+  );
+
+  // Mantém a aba ativa sempre entre as disponíveis para o contexto atual.
+  useEffect(() => {
+    if (!abas.some((a) => a.id === abaAtiva)) setAbaAtiva('gerais');
+  }, [abas, abaAtiva]);
+
+  const tituloForm = editando
+    ? modoHistorico
+      ? 'Editar acolhido do histórico'
+      : 'Editar acolhido'
+    : modoHistorico
+      ? 'Cadastrar'
+      : 'Novo acolhido';
 
   const tipoAltaSelecionado = TIPOS_ALTA.find((t) => t.valor === form.tipoAlta);
 
@@ -488,9 +693,9 @@ export default function AcolhidoForm({
   return (
     <form className="card form" onSubmit={handleSubmit}>
       <div className="form-cabecalho">
-        <h2>{editando ? 'Editar acolhido' : 'Novo acolhido'}</h2>
+        <h2>{tituloForm}</h2>
         <div className="form-cabecalho-acoes">
-          {!editando && (
+          {!editando && !modoHistorico && (
             <button
               type="button"
               className="btn btn-secundario"
@@ -518,6 +723,22 @@ export default function AcolhidoForm({
         </div>
       </div>
 
+      <div className="form-abas" role="tablist" aria-label="Seções do cadastro">
+        {abas.map((aba) => (
+          <button
+            key={aba.id}
+            type="button"
+            role="tab"
+            aria-selected={abaAtiva === aba.id}
+            className={`form-aba-btn ${abaAtiva === aba.id ? 'ativo' : ''}`}
+            onClick={() => setAbaAtiva(aba.id)}
+          >
+            {aba.rotulo}
+          </button>
+        ))}
+      </div>
+
+      {abaAtiva === 'gerais' && (
       <div className="grid">
         <div className="campo campo-largo">
           <label>Foto do acolhido</label>
@@ -677,7 +898,31 @@ export default function AcolhidoForm({
           />
         </div>
 
-        {editando && (
+        <div className="campo campo-largo">
+          <label htmlFor="motivoAdesaoId">Motivo de adesão *</label>
+          <select
+            id="motivoAdesaoId"
+            name="motivoAdesaoId"
+            value={form.motivoAdesaoId}
+            onChange={handleChange}
+          >
+            <option value="">Selecione...</option>
+            {motivosAdesao.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nome}
+              </option>
+            ))}
+          </select>
+          {erros.motivoAdesaoId && (
+            <span className="erro">{erros.motivoAdesaoId}</span>
+          )}
+          <span className="campo-ajuda">
+            Por que o acolhido entrou na comunidade. Gerencie as opções no menu
+            &quot;Motivos&quot;.
+          </span>
+        </div>
+
+        {mostrarAlta && (
           <div className="campo campo-largo">
             <label className="campo-check">
               <input
@@ -685,16 +930,19 @@ export default function AcolhidoForm({
                 name="alta"
                 checked={form.alta}
                 onChange={handleChange}
+                disabled={modoHistorico}
               />
               <span>Alta</span>
             </label>
             <span className="campo-ajuda">
-              Marque se o acolhido recebeu alta e informe a data correspondente.
+              {modoHistorico
+                ? 'No histórico a alta é obrigatória. Informe abaixo a data e o tipo da alta.'
+                : 'Marque se o acolhido recebeu alta e informe a data correspondente.'}
             </span>
           </div>
         )}
 
-        {editando && form.alta && (
+        {mostrarAlta && form.alta && (
           <div className="campo">
             <label htmlFor="dataAlta">Data da alta *</label>
             <input
@@ -710,7 +958,7 @@ export default function AcolhidoForm({
           </div>
         )}
 
-        {editando && form.alta && (
+        {mostrarAlta && form.alta && (
           <div className="campo">
             <label htmlFor="tipoAlta">Tipo de alta *</label>
             <select
@@ -733,6 +981,35 @@ export default function AcolhidoForm({
           </div>
         )}
 
+        {mostrarAlta && form.alta && form.tipoAlta === 'DESISTENCIA' && (
+          <div className="campo">
+            <label htmlFor="motivoDesistenciaId">Motivo da desistência *</label>
+            <select
+              id="motivoDesistenciaId"
+              name="motivoDesistenciaId"
+              value={form.motivoDesistenciaId}
+              onChange={handleChange}
+            >
+              <option value="">Selecione...</option>
+              {motivosDesistencia.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nome}
+                </option>
+              ))}
+            </select>
+            {erros.motivoDesistenciaId && (
+              <span className="erro">{erros.motivoDesistenciaId}</span>
+            )}
+            <span className="campo-ajuda">
+              Por que o acolhido interrompeu o tratamento.
+            </span>
+          </div>
+        )}
+      </div>
+      )}
+
+      {abaAtiva === 'medicacoes' && (
+      <div className="grid">
         <div className="campo campo-largo">
           <label>Medicamentos prescritos</label>
           <div className="dual-list">
@@ -842,14 +1119,199 @@ export default function AcolhidoForm({
             </div>
           </div>
           <span className="campo-ajuda">
-            As doses por período são definidas no Controle de administração,
-            em Medicamentos.
+            {permitirDosesECombinados
+              ? 'Selecione os medicamentos e informe abaixo as doses por período.'
+              : 'As doses por período são definidas no Controle de administração, em Medicamentos.'}
           </span>
         </div>
 
-        {!editando && (
+        {permitirDosesECombinados && medicamentosSelecionados.length > 0 && (
           <div className="campo campo-largo">
-            <label>Anexos (opcional)</label>
+            <label>Doses por período</label>
+            <div className="tabela-wrapper doses-tabela-wrapper">
+              <table className="tabela doses-tabela">
+                <thead>
+                  <tr>
+                    <th>Medicamento</th>
+                    <th>Manhã</th>
+                    <th>Tarde</th>
+                    <th>Noite</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {medicamentosSelecionados.map((m) => {
+                    const dose = doseDoMedicamento(m.id);
+                    return (
+                      <tr key={m.id}>
+                        <td>{m.nome}</td>
+                        {['manha', 'tarde', 'noite'].map((periodo) => (
+                          <td key={periodo}>
+                            <input
+                              type="number"
+                              min="0"
+                              className="dose-input"
+                              value={dose[periodo]}
+                              onChange={(e) => atualizarDose(m.id, periodo, e.target.value)}
+                              aria-label={`${m.nome} - ${periodo}`}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <span className="campo-ajuda">
+              Quantidade de comprimidos por período (0 quando não toma naquele período).
+            </span>
+          </div>
+        )}
+      </div>
+      )}
+
+      {abaAtiva === 'combinados' && (
+      <div className="grid">
+        <div className="campo campo-largo">
+          <label>Combinados (opcional)</label>
+            <div className="anexo-upload">
+              <div className="anexo-upload-campos anexo-upload-campos-vertical">
+                <div className="campo">
+                  <label htmlFor="hist-combinado-tipo">Tipo</label>
+                  <select
+                    id="hist-combinado-tipo"
+                    value={combinadoTipo}
+                    onChange={(e) => setCombinadoTipo(e.target.value)}
+                  >
+                    <option value="">Selecione o tipo...</option>
+                    {TIPOS_COMBINADO.map((t) => (
+                      <option key={t.valor} value={t.valor}>
+                        {t.rotulo}
+                      </option>
+                    ))}
+                  </select>
+                  {erros.combinadoTipo && <span className="erro">{erros.combinadoTipo}</span>}
+                </div>
+                {ehRessocializacaoCombinado ? (
+                  <div className="campo combinado-datas-linha">
+                    <div className="campo">
+                      <label htmlFor="hist-combinado-ida">Data de ida</label>
+                      <input
+                        id="hist-combinado-ida"
+                        value={combinadoDataIda}
+                        onChange={(e) => setCombinadoDataIda(maskData(e.target.value))}
+                        placeholder="dd/mm/aaaa"
+                        inputMode="numeric"
+                        maxLength={10}
+                      />
+                      {erros.combinadoDataIda && (
+                        <span className="erro">{erros.combinadoDataIda}</span>
+                      )}
+                    </div>
+                    <div className="campo">
+                      <label htmlFor="hist-combinado-volta">Data de volta</label>
+                      <input
+                        id="hist-combinado-volta"
+                        value={combinadoDataVolta}
+                        onChange={(e) => setCombinadoDataVolta(maskData(e.target.value))}
+                        placeholder="dd/mm/aaaa"
+                        inputMode="numeric"
+                        maxLength={10}
+                      />
+                      {erros.combinadoDataVolta && (
+                        <span className="erro">{erros.combinadoDataVolta}</span>
+                      )}
+                    </div>
+                  </div>
+                ) : combinadoTipo ? (
+                  <div className="campo">
+                    <label htmlFor="hist-combinado-data">Data do combinado *</label>
+                    <input
+                      id="hist-combinado-data"
+                      value={combinadoData}
+                      onChange={(e) => setCombinadoData(maskData(e.target.value))}
+                      placeholder="dd/mm/aaaa"
+                      inputMode="numeric"
+                      maxLength={10}
+                    />
+                    {erros.combinadoData && (
+                      <span className="erro">{erros.combinadoData}</span>
+                    )}
+                  </div>
+                ) : null}
+                <div className="campo campo-largo">
+                  <label htmlFor="hist-combinado-descricao">Descrição</label>
+                  <textarea
+                    id="hist-combinado-descricao"
+                    value={combinadoDescricao}
+                    onChange={(e) => setCombinadoDescricao(e.target.value)}
+                    placeholder="Detalhes do combinado (motivo, local, observações)"
+                    rows={3}
+                    maxLength={1000}
+                  />
+                  {erros.combinadoDescricao && (
+                    <span className="erro">{erros.combinadoDescricao}</span>
+                  )}
+                </div>
+              </div>
+              <div className="anexo-upload-acoes">
+                <button
+                  type="button"
+                  className="btn btn-secundario"
+                  onClick={adicionarCombinado}
+                >
+                  Adicionar à lista
+                </button>
+              </div>
+            </div>
+
+            {combinadosPendentes.length > 0 && (
+              <ul className="combinados-pendentes">
+                {combinadosPendentes.map((c) => {
+                  const rotulo =
+                    TIPOS_COMBINADO.find((t) => t.valor === c.tipo)?.rotulo ?? c.tipo;
+                  return (
+                    <li key={c.localId} className="combinado-pendente">
+                      <div className="combinado-pendente-info">
+                        <span className="combinado-pendente-tipo">{rotulo}</span>
+                        {c.dataIda ? (
+                          <span className="combinado-pendente-datas">
+                            {`Ida ${isoParaData(c.dataIda)} · Volta ${isoParaData(c.dataVolta)}`}
+                          </span>
+                        ) : c.dataCombinado ? (
+                          <span className="combinado-pendente-datas">
+                            {`Data ${isoParaData(c.dataCombinado)}`}
+                          </span>
+                        ) : null}
+                        <span className="combinado-pendente-descricao">{c.descricao}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="anexo-thumb-remover"
+                        onClick={() => removerCombinadoPendente(c.localId)}
+                        aria-label="Remover combinado"
+                        title="Remover"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <span className="campo-ajuda">
+              {editando
+                ? 'Os novos combinados são criados ao salvar. Os já existentes ficam na página Combinados.'
+                : 'Os combinados são criados e vinculados ao acolhido após o cadastro.'}
+            </span>
+          </div>
+      </div>
+      )}
+
+      {abaAtiva === 'anexos' && (
+      <div className="grid">
+        <div className="campo campo-largo">
+          <label>Anexos (opcional)</label>
             <div className="anexo-upload">
               <div className="anexo-upload-campos anexo-upload-campos-com-nome">
                 <div className="campo">
@@ -902,7 +1364,9 @@ export default function AcolhidoForm({
             </div>
             {erros.anexo && <span className="erro">{erros.anexo}</span>}
             <span className="campo-ajuda">
-              Os anexos são enviados após o cadastro do acolhido.
+              {editando
+                ? 'Os novos anexos são enviados ao salvar. Para ver ou gerenciar os anexos já existentes, use "Anexos" na lista de acolhidos.'
+                : 'Os anexos são enviados após o cadastro do acolhido.'}
             </span>
 
             {anexosPendentes.length > 0 && (
@@ -951,8 +1415,8 @@ export default function AcolhidoForm({
               </ul>
             )}
           </div>
-        )}
       </div>
+      )}
 
       <div className="acoes">
         <button type="submit" className="btn btn-primario" disabled={salvando}>

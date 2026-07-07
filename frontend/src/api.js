@@ -54,10 +54,15 @@ export const authService = {
 
 export const acolhidoService = {
   listar: () => api.get('/acolhidos').then(extrairLista),
+  listarHistorico: () => api.get('/acolhidos/historico').then(extrairLista),
   buscarPorId: (id) => api.get(`/acolhidos/${id}`).then(extrairRegistro),
   criar: (dados) => api.post('/acolhidos', dados).then(extrairRegistro),
   atualizar: (id, dados) => api.put(`/acolhidos/${id}`, dados).then(extrairRegistro),
   deletar: (id) => api.delete(`/acolhidos/${id}`),
+  // Envia um ou mais acolhidos ao arquivo morto (recebe um array de ids).
+  arquivar: (ids) => api.post('/acolhidos/historico', ids).then((r) => r.data),
+  // Restaura um acolhido do arquivo morto de volta para a lista.
+  restaurar: (id) => api.post(`/acolhidos/${id}/restaurar`).then(extrairRegistro),
   enviarFoto: (id, arquivo) => {
     const form = new FormData();
     form.append('arquivo', arquivo);
@@ -77,6 +82,15 @@ export const medicamentoService = {
   criar: (dados) => api.post('/medicamentos', dados).then(extrairRegistro),
   atualizar: (id, dados) => api.put(`/medicamentos/${id}`, dados).then(extrairRegistro),
   deletar: (id) => api.delete(`/medicamentos/${id}`),
+};
+
+export const motivoService = {
+  // categoria: 'ADESAO' ou 'DESISTENCIA'.
+  listar: (categoria) =>
+    api.get('/motivos', { params: { categoria } }).then(extrairLista),
+  criar: (dados) => api.post('/motivos', dados).then(extrairRegistro),
+  atualizar: (id, dados) => api.put(`/motivos/${id}`, dados).then(extrairRegistro),
+  deletar: (id) => api.delete(`/motivos/${id}`),
 };
 
 export const prescricaoService = {
@@ -99,6 +113,36 @@ export const administracaoService = {
     api
       .put(`/acolhidos/${acolhidoId}/administracoes`, dados)
       .then((r) => r.data),
+};
+
+export const relatorioService = {
+  // Envia o payload ja calculado e recebe o PDF (gerado na Lambda) como Blob.
+  gerarPdf: async (tipo, dados) => {
+    try {
+      const resposta = await api.post(
+        '/relatorios/pdf',
+        { tipo, dados },
+        { responseType: 'blob' }
+      );
+      return resposta.data;
+    } catch (erro) {
+      const blob = erro?.response?.data;
+      if (blob instanceof Blob) {
+        try {
+          const texto = await blob.text();
+          const json = JSON.parse(texto);
+          if (json?.message) {
+            throw new Error(json.message);
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof Error && parseErr.message !== '[object Object]') {
+            throw parseErr;
+          }
+        }
+      }
+      throw erro;
+    }
+  },
 };
 
 export const combinadoService = {

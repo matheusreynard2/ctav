@@ -69,13 +69,16 @@ export default function DetalhesCombinadoModal({ combinado, onFechar }) {
             <h4 className="detalhes-secao-titulo">Informações do combinado</h4>
             <div className="detalhes-grid">
               <Campo label="Acolhido" valor={combinado.acolhidoNome} />
+              <Campo label="CPF" valor={combinado.acolhidoCpf} />
               <Campo label="Tipo de combinado" valor={rotuloTipoCombinado(combinado.tipo)} />
-              {ehRessocializacao && (
+              {ehRessocializacao ? (
                 <>
                   <Campo label="Data de ida" valor={formatarData(combinado.dataIda)} />
                   <Campo label="Data de volta" valor={formatarData(combinado.dataVolta)} />
                 </>
-              )}
+              ) : combinado.dataCombinado ? (
+                <Campo label="Data do combinado" valor={formatarData(combinado.dataCombinado)} />
+              ) : null}
               <Campo label="Descrição" valor={combinado.descricao} largo />
             </div>
           </section>

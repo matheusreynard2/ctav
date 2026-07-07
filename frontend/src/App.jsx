@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   acolhidoService,
   anexoService,
   authService,
   combinadoService,
   medicamentoService,
+  motivoService,
 } from './api';
 import Login from './components/Login.jsx';
 import DetalhesAcolhidoModal from './components/DetalhesAcolhidoModal.jsx';
@@ -15,12 +16,16 @@ import ModalConfirmacao from './components/ModalConfirmacao.jsx';
 import ModalMensagem from './components/ModalMensagem.jsx';
 import AcolhidoForm from './components/AcolhidoForm.jsx';
 import AcolhidoList from './components/AcolhidoList.jsx';
+import HistoricoList from './components/HistoricoList.jsx';
 import MedicamentoForm from './components/MedicamentoForm.jsx';
 import MedicamentoList from './components/MedicamentoList.jsx';
+import MotivoForm from './components/MotivoForm.jsx';
+import MotivoList from './components/MotivoList.jsx';
 import CombinadoForm from './components/CombinadoForm.jsx';
 import CombinadoList from './components/CombinadoList.jsx';
 import Relatorios from './components/Relatorios.jsx';
 import ControleMedicamentos from './components/ControleMedicamentos.jsx';
+import { exportTutorialPdf } from './utils/exportarRelatoriosPdf';
 
 export default function App() {
   const [pagina, setPagina] = useState('inicio');
@@ -37,12 +42,31 @@ export default function App() {
   const [acolhidoParaExcluir, setAcolhidoParaExcluir] = useState(null);
   const [excluindoAcolhido, setExcluindoAcolhido] = useState(false);
 
+  // Arquivo morto / histórico de acolhidos.
+  const [historico, setHistorico] = useState([]);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+  // Envio ao histórico (arquivamento) — guarda os registros selecionados.
+  const [arquivamento, setArquivamento] = useState(null); // { registros }
+  const [arquivando, setArquivando] = useState(false);
+  // Restauração de volta para a lista de acolhidos.
+  const [restauracao, setRestauracao] = useState(null); // { registros }
+  const [restaurando, setRestaurando] = useState(false);
+
   const [medicamentos, setMedicamentos] = useState([]);
   const [carregandoMedicamentos, setCarregandoMedicamentos] = useState(false);
   const [salvandoMedicamento, setSalvandoMedicamento] = useState(false);
   const [medicamentoEditando, setMedicamentoEditando] = useState(null);
   const [medicamentoParaExcluir, setMedicamentoParaExcluir] = useState(null);
   const [excluindoMedicamento, setExcluindoMedicamento] = useState(false);
+
+  // Motivos de adesao e desistencia (CRUD e uso no cadastro de acolhido).
+  const [motivosAdesao, setMotivosAdesao] = useState([]);
+  const [motivosDesistencia, setMotivosDesistencia] = useState([]);
+  const [carregandoMotivos, setCarregandoMotivos] = useState(false);
+  const [salvandoMotivo, setSalvandoMotivo] = useState(false);
+  const [motivoEditando, setMotivoEditando] = useState(null);
+  const [motivoParaExcluir, setMotivoParaExcluir] = useState(null);
+  const [excluindoMotivo, setExcluindoMotivo] = useState(false);
 
   const [combinados, setCombinados] = useState([]);
   const [carregandoCombinados, setCarregandoCombinados] = useState(false);
@@ -61,6 +85,23 @@ export default function App() {
 
   const mostrarMensagem = (tipo, texto, paginaDestino = null) => {
     setModal({ id: Date.now() + Math.random(), tipo, texto, paginaDestino });
+  };
+
+  const [gerandoTutorial, setGerandoTutorial] = useState(false);
+
+  const handleTutorial = async () => {
+    if (gerandoTutorial) return;
+    setGerandoTutorial(true);
+    try {
+      await exportTutorialPdf();
+    } catch (e) {
+      mostrarMensagem(
+        'erro',
+        e?.message || 'Não foi possível gerar o tutorial em PDF. Tente novamente.'
+      );
+    } finally {
+      setGerandoTutorial(false);
+    }
   };
 
   const extrairErroApi = (err, padrao) => {
@@ -87,6 +128,18 @@ export default function App() {
     }
   };
 
+  const carregarHistorico = async () => {
+    setCarregandoHistorico(true);
+    try {
+      const dados = await acolhidoService.listarHistorico();
+      setHistorico(Array.isArray(dados) ? dados : []);
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar o histórico.'));
+    } finally {
+      setCarregandoHistorico(false);
+    }
+  };
+
   const carregarMedicamentos = async () => {
     setCarregandoMedicamentos(true);
     try {
@@ -96,6 +149,22 @@ export default function App() {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar medicamentos.'));
     } finally {
       setCarregandoMedicamentos(false);
+    }
+  };
+
+  const carregarMotivos = async () => {
+    setCarregandoMotivos(true);
+    try {
+      const [adesao, desistencia] = await Promise.all([
+        motivoService.listar('ADESAO'),
+        motivoService.listar('DESISTENCIA'),
+      ]);
+      setMotivosAdesao(Array.isArray(adesao) ? adesao : []);
+      setMotivosDesistencia(Array.isArray(desistencia) ? desistencia : []);
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar os motivos.'));
+    } finally {
+      setCarregandoMotivos(false);
     }
   };
 
@@ -141,7 +210,9 @@ export default function App() {
   useEffect(() => {
     if (!usuario) return;
     carregarAcolhidos();
+    carregarHistorico();
     carregarMedicamentos();
+    carregarMotivos();
     carregarCombinados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario]);
@@ -150,6 +221,7 @@ export default function App() {
     setPagina(novaPagina);
     setAcolhidoEditando(null);
     setMedicamentoEditando(null);
+    setMotivoEditando(null);
     setCombinadoEditando(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -164,32 +236,84 @@ export default function App() {
     if (destino === 'acolhidos') {
       setAcolhidoEditando(null);
       setPagina('acolhidos');
+    } else if (destino === 'historico') {
+      setAcolhidoEditando(null);
+      setPagina('historico');
     } else if (destino === 'medicamentos') {
       setMedicamentoEditando(null);
       setPagina('medicamentos');
     } else if (destino === 'combinados') {
       setCombinadoEditando(null);
       setPagina('combinados');
+    } else if (destino === 'motivos-adesao') {
+      setMotivoEditando(null);
+      setPagina('motivos-adesao');
+    } else if (destino === 'motivos-desistencia') {
+      setMotivoEditando(null);
+      setPagina('motivos-desistencia');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSalvarAcolhido = async (dados, anexosPendentes = [], foto = {}) => {
+  const salvarAcolhido = async (
+    dados,
+    anexosPendentes = [],
+    foto = {},
+    combinadosPendentes = [],
+    contexto = 'acolhidos'
+  ) => {
+    const noHistorico = contexto === 'historico';
     setSalvandoAcolhido(true);
     try {
       if (acolhidoEditando) {
-        await acolhidoService.atualizar(acolhidoEditando.id, dados);
+        const idEditado = acolhidoEditando.id;
+        await acolhidoService.atualizar(idEditado, dados);
+
+        let falhaFotoEdit = false;
         try {
           if (foto.file) {
-            await acolhidoService.enviarFoto(acolhidoEditando.id, foto.file);
+            await acolhidoService.enviarFoto(idEditado, foto.file);
           } else if (foto.remover) {
-            await acolhidoService.removerFoto(acolhidoEditando.id);
+            await acolhidoService.removerFoto(idEditado);
           }
         } catch {
-          mostrarMensagem('erro', 'Acolhido atualizado, mas a foto não pôde ser salva.');
+          falhaFotoEdit = true;
         }
+
+        let falhasAnexosEdit = 0;
+        for (const anexo of anexosPendentes) {
+          try {
+            await anexoService.enviar(idEditado, anexo.file, anexo.tipo, anexo.nomeArquivo);
+          } catch {
+            falhasAnexosEdit += 1;
+          }
+        }
+
+        let falhasCombinadosEdit = 0;
+        for (const combinado of combinadosPendentes) {
+          try {
+            await combinadoService.criar({ acolhidoId: idEditado, ...combinado });
+          } catch {
+            falhasCombinadosEdit += 1;
+          }
+        }
+
         await carregarAcolhidos();
-        abrirModalSucesso('Acolhido atualizado com sucesso.', 'acolhidos');
+        await carregarHistorico();
+        await carregarCombinados();
+
+        const problemas = [];
+        if (falhaFotoEdit) problemas.push('a foto');
+        if (falhasAnexosEdit > 0) problemas.push(`${falhasAnexosEdit} anexo(s)`);
+        if (falhasCombinadosEdit > 0) problemas.push(`${falhasCombinadosEdit} combinado(s)`);
+        if (problemas.length > 0) {
+          mostrarMensagem(
+            'erro',
+            `Acolhido atualizado, mas ${problemas.join(' e ')} não puderam ser salvos.`
+          );
+        } else {
+          abrirModalSucesso('Acolhido atualizado com sucesso.', contexto);
+        }
         return true;
       }
 
@@ -213,18 +337,31 @@ export default function App() {
         }
       }
 
-      await carregarAcolhidos();
+      let falhasCombinados = 0;
+      for (const combinado of combinadosPendentes) {
+        try {
+          await combinadoService.criar({ acolhidoId: criado.id, ...combinado });
+        } catch {
+          falhasCombinados += 1;
+        }
+      }
 
-      if (falhas > 0 || falhaFoto) {
+      await carregarAcolhidos();
+      await carregarHistorico();
+      await carregarCombinados();
+
+      const ondeCadastrado = noHistorico ? ' no histórico' : '';
+      if (falhas > 0 || falhaFoto || falhasCombinados > 0) {
         const partes = [];
         if (falhas > 0) partes.push(`${falhas} anexo(s)`);
         if (falhaFoto) partes.push('a foto');
+        if (falhasCombinados > 0) partes.push(`${falhasCombinados} combinado(s)`);
         mostrarMensagem(
           'erro',
-          `Acolhido cadastrado, mas ${partes.join(' e ')} não puderam ser enviados.`
+          `Acolhido cadastrado${ondeCadastrado}, mas ${partes.join(' e ')} não puderam ser enviados.`
         );
       } else {
-        abrirModalSucesso('Acolhido cadastrado com sucesso.', 'acolhidos');
+        abrirModalSucesso(`Acolhido cadastrado${ondeCadastrado} com sucesso.`, contexto);
       }
 
       return criado;
@@ -235,6 +372,12 @@ export default function App() {
       setSalvandoAcolhido(false);
     }
   };
+
+  const handleSalvarAcolhido = (dados, anexosPendentes = [], foto = {}, combinadosPendentes = []) =>
+    salvarAcolhido(dados, anexosPendentes, foto, combinadosPendentes, 'acolhidos');
+
+  const handleSalvarHistorico = (dados, anexosPendentes = [], foto = {}, combinadosPendentes = []) =>
+    salvarAcolhido(dados, anexosPendentes, foto, combinadosPendentes, 'historico');
 
   const handleExibirAcolhido = (acolhido) => {
     setAcolhidoSelecionado(acolhido);
@@ -284,12 +427,106 @@ export default function App() {
       }
       setAcolhidoParaExcluir(null);
       await carregarAcolhidos();
+      await carregarHistorico();
       await carregarCombinados();
     } catch (err) {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir acolhido.'));
     } finally {
       setExcluindoAcolhido(false);
     }
+  };
+
+  const handleEditarHistorico = (acolhido) => {
+    setAcolhidoEditando(acolhido);
+    setPagina('cadastro-historico');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Envio ao arquivo morto (um ou vários acolhidos ao mesmo tempo).
+  const handleArquivar = (registros) => {
+    const lista = Array.isArray(registros) ? registros : [registros];
+    if (!lista.length) return;
+    // Só é permitido enviar ao histórico acolhidos que tiveram alta.
+    const semAlta = lista.filter((r) => !r.alta);
+    if (semAlta.length) {
+      mostrarMensagem(
+        'erro',
+        semAlta.length === lista.length
+          ? 'Só é possível enviar ao histórico acolhidos que tiveram alta. Dê alta antes de enviar.'
+          : `${semAlta.length} acolhido(s) selecionado(s) não tiveram alta e não podem ir ao histórico. Dê alta antes de enviar.`
+      );
+      return;
+    }
+    setArquivamento({ registros: lista });
+  };
+
+  const cancelarArquivamento = () => {
+    if (arquivando) return;
+    setArquivamento(null);
+  };
+
+  const confirmarArquivamento = async () => {
+    if (!arquivamento) return;
+    const ids = arquivamento.registros.map((r) => r.id);
+    setArquivando(true);
+    try {
+      const resposta = await acolhidoService.arquivar(ids);
+      const total = resposta?.arquivados ?? ids.length;
+      setArquivamento(null);
+      await carregarAcolhidos();
+      await carregarHistorico();
+      await carregarCombinados();
+      mostrarMensagem(
+        'sucesso',
+        `${total} acolhido(s) enviado(s) ao histórico com sucesso.`
+      );
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao enviar ao histórico.'));
+    } finally {
+      setArquivando(false);
+    }
+  };
+
+  // Restauração do histórico de volta para a lista de acolhidos.
+  const handleRestaurar = (registros) => {
+    const lista = Array.isArray(registros) ? registros : [registros];
+    if (!lista.length) return;
+    setRestauracao({ registros: lista });
+  };
+
+  const cancelarRestauracao = () => {
+    if (restaurando) return;
+    setRestauracao(null);
+  };
+
+  const confirmarRestauracao = async () => {
+    if (!restauracao) return;
+    const { registros } = restauracao;
+    setRestaurando(true);
+    let sucesso = 0;
+    let falhas = 0;
+    for (const r of registros) {
+      try {
+        await acolhidoService.restaurar(r.id);
+        sucesso += 1;
+      } catch {
+        falhas += 1;
+      }
+    }
+    setRestauracao(null);
+    await carregarAcolhidos();
+    await carregarHistorico();
+    if (falhas === 0) {
+      mostrarMensagem('sucesso', `${sucesso} acolhido(s) restaurado(s) com sucesso.`);
+    } else if (sucesso === 0) {
+      mostrarMensagem('erro', 'Não foi possível restaurar os acolhidos selecionados.');
+    } else {
+      mostrarMensagem(
+        'erro',
+        `${sucesso} restaurado(s); ${falhas} não puderam ser restaurados.`
+      );
+    }
+    setRestaurando(false);
   };
 
   const handleSalvarMedicamento = async (dados) => {
@@ -349,6 +586,78 @@ export default function App() {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir medicamento.'));
     } finally {
       setExcluindoMedicamento(false);
+    }
+  };
+
+  const paginaListaMotivo = (categoria) =>
+    categoria === 'DESISTENCIA' ? 'motivos-desistencia' : 'motivos-adesao';
+
+  const handleSalvarMotivo = async (dados) => {
+    setSalvandoMotivo(true);
+    try {
+      const destino = paginaListaMotivo(dados.categoria);
+      if (motivoEditando) {
+        await motivoService.atualizar(motivoEditando.id, dados);
+        await carregarMotivos();
+        // O nome do motivo é derivado do relacionamento; recarregamos os
+        // acolhidos (ativos e do histórico) para refletir a alteração nas
+        // listas, detalhes e relatórios sem precisar recarregar a página.
+        await carregarAcolhidos();
+        await carregarHistorico();
+        abrirModalSucesso('Motivo atualizado com sucesso.', destino);
+      } else {
+        await motivoService.criar(dados);
+        setMotivoEditando(null);
+        await carregarMotivos();
+        abrirModalSucesso('Motivo cadastrado com sucesso.', destino);
+      }
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar motivo.'));
+    } finally {
+      setSalvandoMotivo(false);
+    }
+  };
+
+  const handleEditarMotivo = (motivo) => {
+    setMotivoEditando(motivo);
+    setPagina(
+      motivo.categoria === 'DESISTENCIA'
+        ? 'cadastro-motivo-desistencia'
+        : 'cadastro-motivo-adesao'
+    );
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelarEdicaoMotivo = (categoria) => {
+    setMotivoEditando(null);
+    setPagina(paginaListaMotivo(categoria));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleExcluirMotivo = (motivo) => {
+    setMotivoParaExcluir(motivo);
+  };
+
+  const cancelarExclusaoMotivo = () => {
+    if (excluindoMotivo) return;
+    setMotivoParaExcluir(null);
+  };
+
+  const confirmarExclusaoMotivo = async () => {
+    if (!motivoParaExcluir) return;
+    setExcluindoMotivo(true);
+    try {
+      await motivoService.deletar(motivoParaExcluir.id);
+      mostrarMensagem('sucesso', 'Motivo excluído com sucesso.');
+      if (motivoEditando?.id === motivoParaExcluir.id) {
+        setMotivoEditando(null);
+      }
+      setMotivoParaExcluir(null);
+      await carregarMotivos();
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir motivo.'));
+    } finally {
+      setExcluindoMotivo(false);
     }
   };
 
@@ -437,7 +746,9 @@ export default function App() {
         ? acolhidoService
         : tipo === 'medicamento'
           ? medicamentoService
-          : combinadoService;
+          : tipo === 'motivo'
+            ? motivoService
+            : combinadoService;
 
     setExcluindoEmMassa(true);
     let sucesso = 0;
@@ -453,9 +764,12 @@ export default function App() {
 
     if (tipo === 'acolhido') {
       await carregarAcolhidos();
+      await carregarHistorico();
       await carregarCombinados();
     } else if (tipo === 'medicamento') {
       await carregarMedicamentos();
+    } else if (tipo === 'motivo') {
+      await carregarMotivos();
     } else {
       await carregarCombinados();
     }
@@ -490,18 +804,110 @@ export default function App() {
     setPagina('inicio');
     setAcolhidos([]);
     setMedicamentos([]);
+    setMotivosAdesao([]);
+    setMotivosDesistencia([]);
     setCombinados([]);
   };
 
   const mostrarDescricao = pagina === 'inicio';
   const mostrarFormAcolhido = pagina === 'cadastro-acolhido';
   const mostrarListaAcolhidos = pagina === 'acolhidos';
+  const mostrarHistorico = pagina === 'historico';
+  const mostrarFormHistorico = pagina === 'cadastro-historico';
   const mostrarFormMedicamento = pagina === 'cadastro-medicamento';
   const mostrarListaMedicamentos = pagina === 'medicamentos';
   const mostrarFormCombinado = pagina === 'cadastro-combinado';
   const mostrarListaCombinados = pagina === 'combinados';
   const mostrarRelatorios = pagina === 'relatorios';
   const mostrarControleMedicamentos = pagina === 'controle-medicamentos';
+  const mostrarListaMotivosAdesao = pagina === 'motivos-adesao';
+  const mostrarFormMotivoAdesao = pagina === 'cadastro-motivo-adesao';
+  const mostrarListaMotivosDesistencia = pagina === 'motivos-desistencia';
+  const mostrarFormMotivoDesistencia = pagina === 'cadastro-motivo-desistencia';
+
+  // Relatórios consideram tanto os acolhidos ativos quanto os que foram
+  // enviados ao histórico (arquivo morto).
+  const acolhidosParaRelatorios = useMemo(
+    () => [...acolhidos, ...historico],
+    [acolhidos, historico]
+  );
+
+  // Atalhos exibidos na página inicial. Cada card leva para a página do
+  // respectivo conteúdo gerenciado pelo sistema.
+  const atalhosInicio = [
+    {
+      id: 'acolhidos',
+      titulo: 'Acolhidos',
+      descricao: 'Cadastre e acompanhe os acolhidos da comunidade.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
+    {
+      id: 'medicamentos',
+      titulo: 'Medicações',
+      descricao: 'Gerencie os medicamentos e as prescrições.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7Z" />
+          <path d="m8.5 8.5 7 7" />
+        </svg>
+      ),
+    },
+    {
+      id: 'controle-medicamentos',
+      titulo: 'Controle de administração',
+      descricao: 'Registre, dia a dia, as doses administradas.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+          <path d="M16 2v4M8 2v4M3 10h18" />
+          <path d="m9 16 2 2 4-4" />
+        </svg>
+      ),
+    },
+    {
+      id: 'combinados',
+      titulo: 'Combinados (saídas)',
+      descricao: 'Agende saídas e compromissos dos acolhidos.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 11 3 5l6-2 6 2 6-2v14l-6 2-6-2-6 2V11" />
+          <path d="M9 3v16M15 5v16" />
+        </svg>
+      ),
+    },
+    {
+      id: 'historico',
+      titulo: 'Histórico',
+      descricao: 'Consulte o arquivo morto e cadastre nele.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 8a9 9 0 1 0 2.6-4.4L3 6" />
+          <path d="M3 3v3h3" />
+          <path d="M12 8v4l3 2" />
+        </svg>
+      ),
+    },
+    {
+      id: 'relatorios',
+      titulo: 'Relatórios',
+      descricao: 'Indicadores, altas e exportação em PDF.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 3v18h18" />
+          <rect x="7" y="12" width="3" height="6" rx="0.5" />
+          <rect x="12" y="8" width="3" height="10" rx="0.5" />
+          <rect x="17" y="5" width="3" height="13" rx="0.5" />
+        </svg>
+      ),
+    },
+  ];
 
   if (verificandoAuth) {
     return (
@@ -529,30 +935,37 @@ export default function App() {
           <section className="card descricao-sistema">
             <div className="descricao-conteudo">
               <div className="descricao-texto">
-                <span className="descricao-etiqueta">Descrição do Sistema</span>
+                <span className="descricao-etiqueta">Bem-vindo</span>
                 <h2 className="descricao-saudacao">
-                  Bem vindo ao sistema da <strong>CTAV</strong>.
+                  Olá! Este é o sistema da <strong>CTAV</strong>
                 </h2>
                 <p>
-                  Esse sistema gerencia o <strong>Centro Terapêutico Águas Vivas</strong>,
-                  ou seja, seus acolhidos e tudo que envolve eles, como:
+                  Aqui você gerencia o{' '}
+                  <strong>Centro Terapêutico Águas Vivas</strong>: os acolhidos e
+                  tudo que envolve o dia a dia da comunidade — dos cadastros e
+                  medicações até os relatórios. Use os atalhos abaixo para navegar.
                 </p>
-                <ul className="descricao-lista">
-                  <li>medicações</li>
-                  <li>saídas</li>
-                  <li>combinados</li>
-                  <li>altas</li>
-                  <li>etc.</li>
-                </ul>
-                <p>
-                  Você, como tem acesso a ele, deve ser um funcionário, por isso
-                  desejamos uma ótima experiência aqui conosco e qualquer dúvida{' '}
-                  <a href="#" className="descricao-link" onClick={(e) => e.preventDefault()}>
-                    clique aqui
-                  </a>
-                  .
-                </p>
-                <p className="descricao-fechamento">Muito obrigado!</p>
+
+                <div className="descricao-tutorial">
+                  <button
+                    type="button"
+                    className="btn btn-primario descricao-tutorial-btn"
+                    onClick={handleTutorial}
+                    disabled={gerandoTutorial}
+                    aria-busy={gerandoTutorial}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </svg>
+                    {gerandoTutorial
+                      ? 'Gerando tutorial...'
+                      : 'Ver tutorial completo (PDF)'}
+                  </button>
+                  <span className="descricao-tutorial-dica">
+                    Novo por aqui? Baixe o guia passo a passo de todas as funções.
+                  </span>
+                </div>
               </div>
 
               <div className="descricao-ilustracao" aria-hidden="true">
@@ -608,6 +1021,36 @@ export default function App() {
                 </svg>
               </div>
             </div>
+
+            <div className="inicio-atalhos">
+              <h3 className="inicio-atalhos-titulo">O que você pode fazer</h3>
+              <div className="inicio-atalhos-grade">
+                {atalhosInicio.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="inicio-atalho-card"
+                    onClick={() => handleNavegar(item.id)}
+                  >
+                    <span className="inicio-atalho-icone" aria-hidden="true">
+                      {item.icone}
+                    </span>
+                    <span className="inicio-atalho-texto">
+                      <span className="inicio-atalho-titulo">{item.titulo}</span>
+                      <span className="inicio-atalho-descricao">
+                        {item.descricao}
+                      </span>
+                    </span>
+                    <span className="inicio-atalho-seta" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                        <polyline points="12 5 19 12 12 19" />
+                      </svg>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </section>
         )}
 
@@ -615,6 +1058,8 @@ export default function App() {
           <AcolhidoForm
             acolhidoEditando={acolhidoEditando}
             medicamentosDisponiveis={medicamentos}
+            motivosAdesao={motivosAdesao}
+            motivosDesistencia={motivosDesistencia}
             onSalvar={handleSalvarAcolhido}
             onCancelar={handleCancelarEdicaoAcolhido}
             onVerLista={() => handleNavegar('acolhidos')}
@@ -632,8 +1077,41 @@ export default function App() {
             onExcluirSelecionados={(registros) =>
               handleExcluirSelecionados('acolhido', registros)
             }
+            onArquivar={handleArquivar}
+            onArquivarSelecionados={handleArquivar}
             onAnexos={handleAnexosAcolhido}
             onNovo={() => handleNavegar('cadastro-acolhido')}
+          />
+        )}
+
+        {mostrarFormHistorico && (
+          <AcolhidoForm
+            acolhidoEditando={acolhidoEditando}
+            medicamentosDisponiveis={medicamentos}
+            motivosAdesao={motivosAdesao}
+            motivosDesistencia={motivosDesistencia}
+            modoHistorico
+            onSalvar={handleSalvarHistorico}
+            onCancelar={() => handleNavegar('historico')}
+            onVerLista={() => handleNavegar('historico')}
+            salvando={salvandoAcolhido}
+          />
+        )}
+
+        {mostrarHistorico && (
+          <HistoricoList
+            acolhidos={historico}
+            carregando={carregandoHistorico}
+            onExibir={handleExibirAcolhido}
+            onEditar={handleEditarHistorico}
+            onExcluir={handleExcluirAcolhido}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('acolhido', registros)
+            }
+            onRestaurar={handleRestaurar}
+            onRestaurarSelecionados={handleRestaurar}
+            onAnexos={handleAnexosAcolhido}
+            onNovo={() => handleNavegar('cadastro-historico')}
           />
         )}
 
@@ -687,8 +1165,8 @@ export default function App() {
 
         {mostrarRelatorios && (
           <Relatorios
-            acolhidos={acolhidos}
-            carregando={carregandoAcolhidos}
+            acolhidos={acolhidosParaRelatorios}
+            carregando={carregandoAcolhidos || carregandoHistorico}
             onErro={(msg) => mostrarMensagem('erro', msg)}
           />
         )}
@@ -702,10 +1180,69 @@ export default function App() {
             onRecarregarAcolhidos={carregarAcolhidos}
           />
         )}
+
+        {mostrarListaMotivosAdesao && (
+          <MotivoList
+            motivos={motivosAdesao}
+            carregando={carregandoMotivos}
+            titulo="Motivos de adesão"
+            rotuloSingular="motivo de adesão"
+            onEditar={handleEditarMotivo}
+            onExcluir={handleExcluirMotivo}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('motivo', registros)
+            }
+            onNovo={() => handleNavegar('cadastro-motivo-adesao')}
+          />
+        )}
+
+        {mostrarFormMotivoAdesao && (
+          <MotivoForm
+            categoria="ADESAO"
+            rotuloSingular="motivo de adesão"
+            motivoEditando={motivoEditando}
+            onSalvar={handleSalvarMotivo}
+            onCancelar={() => handleCancelarEdicaoMotivo('ADESAO')}
+            onVerLista={() => handleNavegar('motivos-adesao')}
+            salvando={salvandoMotivo}
+          />
+        )}
+
+        {mostrarListaMotivosDesistencia && (
+          <MotivoList
+            motivos={motivosDesistencia}
+            carregando={carregandoMotivos}
+            titulo="Motivos de desistência"
+            rotuloSingular="motivo de desistência"
+            onEditar={handleEditarMotivo}
+            onExcluir={handleExcluirMotivo}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('motivo', registros)
+            }
+            onNovo={() => handleNavegar('cadastro-motivo-desistencia')}
+          />
+        )}
+
+        {mostrarFormMotivoDesistencia && (
+          <MotivoForm
+            categoria="DESISTENCIA"
+            rotuloSingular="motivo de desistência"
+            motivoEditando={motivoEditando}
+            onSalvar={handleSalvarMotivo}
+            onCancelar={() => handleCancelarEdicaoMotivo('DESISTENCIA')}
+            onVerLista={() => handleNavegar('motivos-desistencia')}
+            salvando={salvandoMotivo}
+          />
+        )}
       </main>
 
       <DetalhesAcolhidoModal
         acolhido={acolhidoSelecionado}
+        combinados={
+          acolhidoSelecionado
+            ? combinados.filter((c) => c.acolhidoId === acolhidoSelecionado.id)
+            : []
+        }
         onFechar={handleFecharDetalhesAcolhido}
       />
 
@@ -735,6 +1272,38 @@ export default function App() {
       />
 
       <ModalConfirmacao
+        aberto={Boolean(arquivamento)}
+        titulo="Enviar ao histórico"
+        mensagem={
+          arquivamento
+            ? arquivamento.registros.length === 1
+              ? `Deseja enviar o acolhido "${arquivamento.registros[0].nome}" ao histórico? Ele sairá da lista de acolhidos, mas todos os seus dados (medicamentos, prescrições, administrações, anexos e combinados) serão preservados.`
+              : `Deseja enviar os ${arquivamento.registros.length} acolhido(s) selecionado(s) ao histórico? Eles sairão da lista de acolhidos, mas todos os seus dados serão preservados.`
+            : ''
+        }
+        textoConfirmar={arquivando ? 'Enviando...' : 'Enviar ao histórico'}
+        textoCancelar="Cancelar"
+        onConfirmar={confirmarArquivamento}
+        onCancelar={cancelarArquivamento}
+      />
+
+      <ModalConfirmacao
+        aberto={Boolean(restauracao)}
+        titulo="Restaurar acolhido"
+        mensagem={
+          restauracao
+            ? restauracao.registros.length === 1
+              ? `Deseja restaurar o acolhido "${restauracao.registros[0].nome}" do histórico de volta para a lista de acolhidos?`
+              : `Deseja restaurar os ${restauracao.registros.length} acolhido(s) selecionado(s) do histórico de volta para a lista de acolhidos?`
+            : ''
+        }
+        textoConfirmar={restaurando ? 'Restaurando...' : 'Restaurar'}
+        textoCancelar="Cancelar"
+        onConfirmar={confirmarRestauracao}
+        onCancelar={cancelarRestauracao}
+      />
+
+      <ModalConfirmacao
         aberto={Boolean(medicamentoParaExcluir)}
         titulo="Excluir medicamento"
         mensagem={
@@ -747,6 +1316,21 @@ export default function App() {
         perigo
         onConfirmar={confirmarExclusaoMedicamento}
         onCancelar={cancelarExclusaoMedicamento}
+      />
+
+      <ModalConfirmacao
+        aberto={Boolean(motivoParaExcluir)}
+        titulo="Excluir motivo"
+        mensagem={
+          motivoParaExcluir
+            ? `Deseja realmente excluir o motivo "${motivoParaExcluir.nome}"? Esta ação não pode ser desfeita.`
+            : ''
+        }
+        textoConfirmar={excluindoMotivo ? 'Excluindo...' : 'Excluir'}
+        textoCancelar="Cancelar"
+        perigo
+        onConfirmar={confirmarExclusaoMotivo}
+        onCancelar={cancelarExclusaoMotivo}
       />
 
       <ModalConfirmacao

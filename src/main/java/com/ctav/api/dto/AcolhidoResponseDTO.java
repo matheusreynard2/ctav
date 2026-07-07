@@ -35,6 +35,14 @@ public class AcolhidoResponseDTO {
     // Rotulo amigavel do tipo de alta (ex.: "Alta por conclusão").
     private String tipoAltaRotulo;
     private String descricaoAlta;
+    // Motivos de adesao e desistencia (id + nome para exibicao/relatorios).
+    private Long motivoAdesaoId;
+    private String motivoAdesaoNome;
+    private Long motivoDesistenciaId;
+    private String motivoDesistenciaNome;
+    // Indica se o acolhido esta no arquivo morto/historico e quando foi enviado.
+    private Boolean arquivado;
+    private LocalDateTime arquivadoEm;
     // URL pre-assinada (temporaria) para exibir a foto; null quando nao ha foto.
     private String fotoUrl;
     private List<PrescricaoResponseDTO> prescricoes;
@@ -66,6 +74,20 @@ public class AcolhidoResponseDTO {
                         ? acolhido.getTipoAlta().getRotulo()
                         : null)
                 .descricaoAlta(acolhido.getDescricaoAlta())
+                .motivoAdesaoId(acolhido.getMotivoAdesao() != null
+                        ? acolhido.getMotivoAdesao().getId()
+                        : null)
+                .motivoAdesaoNome(acolhido.getMotivoAdesao() != null
+                        ? acolhido.getMotivoAdesao().getNome()
+                        : null)
+                .motivoDesistenciaId(acolhido.getMotivoDesistencia() != null
+                        ? acolhido.getMotivoDesistencia().getId()
+                        : null)
+                .motivoDesistenciaNome(acolhido.getMotivoDesistencia() != null
+                        ? acolhido.getMotivoDesistencia().getNome()
+                        : null)
+                .arquivado(acolhido.getArquivado())
+                .arquivadoEm(acolhido.getArquivadoEm())
                 .prescricoes(prescricoes)
                 .criadoEm(acolhido.getCriadoEm())
                 .atualizadoEm(acolhido.getAtualizadoEm())

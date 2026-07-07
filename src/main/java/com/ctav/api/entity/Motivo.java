@@ -1,7 +1,6 @@
 package com.ctav.api.entity;
 
-import com.ctav.api.enums.TipoCombinado;
-
+import com.ctav.api.enums.CategoriaMotivo;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,7 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import java.time.LocalDate;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 
 import lombok.AllArgsConstructor;
@@ -25,17 +24,24 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+// Fator de adesao ou desistencia, gerenciado por CRUD pelo usuario e usado nos
+// cadastros de acolhidos e nos relatorios.
 @Entity
-@Table(name = "combinados", indexes = {
-        @Index(name = "idx_combinados_usuario_acolhido", columnList = "usuario_id, acolhido_id"),
-        @Index(name = "idx_combinados_usuario_tipo", columnList = "usuario_id, tipo")
-})
+@Table(name = "motivos",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_motivos_usuario_categoria_nome",
+                        columnNames = {"usuario_id", "categoria", "nome"})
+        },
+        indexes = {
+                @Index(name = "idx_motivos_usuario_categoria", columnList = "usuario_id, categoria")
+        })
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Combinado {
+public class Motivo {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,27 +51,15 @@ public class Combinado {
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "acolhido_id", nullable = false)
-    private Acolhido acolhido;
-
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
-    private TipoCombinado tipo;
+    @Column(name = "categoria", nullable = false, length = 20)
+    private CategoriaMotivo categoria;
 
-    @Column(nullable = false, length = 1000)
+    @Column(nullable = false, length = 120)
+    private String nome;
+
+    @Column(length = 255)
     private String descricao;
-
-    // Preenchidos apenas quando o tipo for RESSOCIALIZACAO.
-    @Column(name = "data_ida")
-    private LocalDate dataIda;
-
-    @Column(name = "data_volta")
-    private LocalDate dataVolta;
-
-    // Data do combinado para os tipos que NÃO são ressocialização.
-    @Column(name = "data_combinado")
-    private LocalDate dataCombinado;
 
     @Column(name = "criado_em", updatable = false)
     private LocalDateTime criadoEm;

@@ -1,0 +1,14 @@
+{
+  "name": "ctav-relatorios-pdf",
+  "version": "1.0.0",
+  "description": "AWS Lambda que gera os PDFs de relatorios do CTAV (jsPDF + jspdf-autotable).",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "test-local": "node test-local.mjs"
+  },
+  "dependencies": {
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8"
+  }
+}

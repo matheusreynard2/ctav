@@ -5,7 +5,9 @@ import com.ctav.api.dto.AcolhidoResponseDTO;
 import com.ctav.api.dto.PrescricaoRequestDTO;
 import com.ctav.api.entity.Acolhido;
 import com.ctav.api.entity.Medicamento;
+import com.ctav.api.entity.Motivo;
 import com.ctav.api.entity.Prescricao;
+import com.ctav.api.enums.CategoriaMotivo;
 import com.ctav.api.exception.BusinessException;
 import com.ctav.api.exception.ResourceNotFoundException;
 import com.ctav.api.repository.AcolhidoRepository;
@@ -19,6 +21,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -50,6 +53,9 @@ public class AcolhidoService {
     MedicamentoRepository medicamentoRepository;
 
     @Inject
+    MotivoService motivoService;
+
+    @Inject
     CombinadoRepository combinadoRepository;
 
     @Inject
@@ -68,6 +74,15 @@ public class AcolhidoService {
     public AcolhidoResponseDTO criar(AcolhidoRequestDTO dto) {
         validarUnicidade(dto.getCpf(), dto.getEmail(), null);
 
+        // Cadastro direto no histórico exige alta (com data e tipo).
+        if (Boolean.TRUE.equals(dto.getArquivado()) && !Boolean.TRUE.equals(dto.getAlta())) {
+            throw new BusinessException(
+                    "Para cadastrar diretamente no histórico é necessário informar a alta do acolhido.");
+        }
+
+        Motivo motivoAdesao = resolverMotivoAdesao(dto.getMotivoAdesaoId());
+        Motivo motivoDesistencia = resolverMotivoDesistencia(dto);
+
         Acolhido acolhido = Acolhido.builder()
                 .usuario(usuarioContext.referencia())
                 .nome(dto.getNome())
@@ -83,6 +98,12 @@ public class AcolhidoService {
                 .dataAlta(Boolean.TRUE.equals(dto.getAlta()) ? dto.getDataAlta() : null)
                 .tipoAlta(tipoAltaEfetivo(dto))
                 .descricaoAlta(descricaoAltaEfetiva(dto))
+                .motivoAdesao(motivoAdesao)
+                .motivoDesistencia(motivoDesistencia)
+                .arquivado(Boolean.TRUE.equals(dto.getArquivado()))
+                .arquivadoEm(Boolean.TRUE.equals(dto.getArquivado())
+                        ? LocalDateTime.now()
+                        : null)
                 .build();
 
         sincronizarPrescricoes(acolhido, dto.getPrescricoes());
@@ -91,13 +112,74 @@ public class AcolhidoService {
         return toResponse(acolhido);
     }
 
+    // Lista apenas os acolhidos ativos (fora do arquivo morto).
     public List<AcolhidoResponseDTO> listar() {
-        List<Acolhido> acolhidos = acolhidoRepository.listarPorUsuario(usuarioContext.id());
+        List<Acolhido> acolhidos =
+                acolhidoRepository.listarAtivosPorUsuario(usuarioContext.id());
         try (S3Presigner presigner = criarPresigner()) {
             return acolhidos.stream()
                     .map(a -> toResponse(a, presigner))
                     .toList();
         }
+    }
+
+    // Lista os acolhidos que estao no arquivo morto/historico.
+    public List<AcolhidoResponseDTO> listarHistorico() {
+        List<Acolhido> acolhidos =
+                acolhidoRepository.listarArquivadosPorUsuario(usuarioContext.id());
+        try (S3Presigner presigner = criarPresigner()) {
+            return acolhidos.stream()
+                    .map(a -> toResponse(a, presigner))
+                    .toList();
+        }
+    }
+
+    // Envia um ou mais acolhidos para o arquivo morto. Mantem todos os dados
+    // relacionados (prescricoes, administracoes, anexos, combinados) intactos,
+    // apenas retirando-os da lista principal. Retorna quantos foram arquivados.
+    @Transactional
+    public int arquivar(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            throw new BusinessException("Selecione ao menos um acolhido para enviar ao histórico.");
+        }
+        List<Acolhido> alvos = ids.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .map(this::buscarEntidadePorId)
+                .toList();
+
+        // Só é permitido arquivar acolhidos que tiveram alta.
+        List<String> semAlta = alvos.stream()
+                .filter(a -> !Boolean.TRUE.equals(a.getAlta()))
+                .map(Acolhido::getNome)
+                .toList();
+        if (!semAlta.isEmpty()) {
+            throw new BusinessException(
+                    "Só é possível enviar ao histórico acolhidos que tiveram alta. "
+                            + "Sem alta: " + String.join(", ", semAlta));
+        }
+
+        LocalDateTime agora = LocalDateTime.now();
+        int total = 0;
+        for (Acolhido acolhido : alvos) {
+            if (!Boolean.TRUE.equals(acolhido.getArquivado())) {
+                acolhido.setArquivado(true);
+                acolhido.setArquivadoEm(agora);
+                acolhidoRepository.persist(acolhido);
+                total++;
+            }
+        }
+        return total;
+    }
+
+    // Restaura um acolhido do arquivo morto de volta para a lista de acolhidos.
+    @Transactional
+    public AcolhidoResponseDTO restaurar(Long id) {
+        Acolhido acolhido = buscarEntidadePorId(id);
+        acolhido.setArquivado(false);
+        acolhido.setArquivadoEm(null);
+        acolhidoRepository.persist(acolhido);
+        return toResponse(acolhido);
     }
 
     public AcolhidoResponseDTO buscarPorId(Long id) {
@@ -123,6 +205,20 @@ public class AcolhidoService {
         acolhido.setDataAlta(teveAlta ? dto.getDataAlta() : null);
         acolhido.setTipoAlta(tipoAltaEfetivo(dto));
         acolhido.setDescricaoAlta(descricaoAltaEfetiva(dto));
+        acolhido.setMotivoAdesao(resolverMotivoAdesao(dto.getMotivoAdesaoId()));
+        acolhido.setMotivoDesistencia(resolverMotivoDesistencia(dto));
+        // So altera o arquivamento quando o cliente envia explicitamente o campo,
+        // preservando o estado atual em edicoes normais (form nao envia o campo).
+        if (dto.getArquivado() != null) {
+            boolean arquivar = Boolean.TRUE.equals(dto.getArquivado());
+            boolean jaArquivado = Boolean.TRUE.equals(acolhido.getArquivado());
+            acolhido.setArquivado(arquivar);
+            if (arquivar && !jaArquivado) {
+                acolhido.setArquivadoEm(LocalDateTime.now());
+            } else if (!arquivar) {
+                acolhido.setArquivadoEm(null);
+            }
+        }
         sincronizarPrescricoes(acolhido, dto.getPrescricoes());
         acolhidoRepository.persist(acolhido);
         return toResponse(acolhido);
@@ -174,6 +270,28 @@ public class AcolhidoService {
         return toResponse(acolhido);
     }
 
+    // Motivo de adesao e sempre obrigatorio (inclusive na edicao).
+    private Motivo resolverMotivoAdesao(Long id) {
+        if (id == null) {
+            throw new BusinessException("O motivo de adesão é obrigatório.");
+        }
+        return motivoService.obterDoUsuario(id, CategoriaMotivo.ADESAO);
+    }
+
+    // Motivo de desistencia so se aplica (e e obrigatorio) quando a alta e por
+    // desistencia; nos demais casos e limpo.
+    private Motivo resolverMotivoDesistencia(AcolhidoRequestDTO dto) {
+        boolean desistencia = Boolean.TRUE.equals(dto.getAlta())
+                && dto.getTipoAlta() == TipoAlta.DESISTENCIA;
+        if (!desistencia) {
+            return null;
+        }
+        if (dto.getMotivoDesistenciaId() == null) {
+            throw new BusinessException("Informe o motivo da desistência.");
+        }
+        return motivoService.obterDoUsuario(dto.getMotivoDesistenciaId(), CategoriaMotivo.DESISTENCIA);
+    }
+
     // O tipo/descricao da alta so fazem sentido quando o acolhido teve alta.
     private TipoAlta tipoAltaEfetivo(AcolhidoRequestDTO dto) {
         return Boolean.TRUE.equals(dto.getAlta()) ? dto.getTipoAlta() : null;
@@ -221,7 +339,12 @@ public class AcolhidoService {
         for (PrescricaoRequestDTO dto : porMedicamento.values()) {
             Prescricao existente = atuaisPorMedicamento.get(dto.getMedicamentoId());
             if (existente != null) {
-                // Mantem as doses definidas no controle de administracao.
+                // Atualiza as doses conforme enviado pelo formulario (que na edicao
+                // vem pre-carregado com as doses atuais, preservando-as quando nao ha
+                // alteracao).
+                existente.setDoseManha(valorDose(dto.getDoseManha()));
+                existente.setDoseTarde(valorDose(dto.getDoseTarde()));
+                existente.setDoseNoite(valorDose(dto.getDoseNoite()));
             } else {
                 Prescricao nova = Prescricao.builder()
                         .usuario(usuarioContext.referencia())

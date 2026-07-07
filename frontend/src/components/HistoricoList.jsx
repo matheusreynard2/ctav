@@ -1,15 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isoParaData } from '../utils/masks';
 
-export default function AcolhidoList({
+const formatarDataHora = (valor) => {
+  if (!valor) return '-';
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return '-';
+  return data.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+};
+
+export default function HistoricoList({
   acolhidos,
   carregando,
   onExibir,
   onEditar,
   onExcluir,
   onExcluirSelecionados,
-  onArquivar,
-  onArquivarSelecionados,
+  onRestaurar,
+  onRestaurarSelecionados,
   onAnexos,
   onNovo,
 }) {
@@ -18,7 +29,6 @@ export default function AcolhidoList({
 
   const lista = Array.isArray(acolhidos) ? acolhidos : [];
 
-  // Limpa a selecao sempre que os dados forem recarregados.
   useEffect(() => {
     setSelecionados(new Set());
   }, [acolhidos]);
@@ -57,24 +67,16 @@ export default function AcolhidoList({
 
   const registrosSelecionados = () => lista.filter((p) => selecionados.has(p.id));
 
-  const excluirSelecionados = () => {
-    onExcluirSelecionados?.(registrosSelecionados());
-  };
-
-  const arquivarSelecionados = () => {
-    onArquivarSelecionados?.(registrosSelecionados());
-  };
-
   if (carregando) {
-    return <div className="card vazio">Carregando acolhidos...</div>;
+    return <div className="card vazio">Carregando histórico...</div>;
   }
 
   if (!lista.length) {
     return (
       <div className="card vazio">
-        <p>Nenhum acolhido cadastrado ainda.</p>
+        <p>Nenhum acolhido no arquivo morto ainda.</p>
         <button type="button" className="btn btn-primario" onClick={onNovo}>
-          Cadastrar acolhido
+          Cadastrar
         </button>
       </div>
     );
@@ -83,7 +85,7 @@ export default function AcolhidoList({
   return (
     <div className="card tabela-wrapper">
       <div className="lista-cabecalho">
-        <h2>Acolhidos cadastrados ({filtrados.length})</h2>
+        <h2>Arquivo morto ({filtrados.length})</h2>
         <div className="busca-lista">
           <input
             type="search"
@@ -91,20 +93,20 @@ export default function AcolhidoList({
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar por nome, CPF ou email..."
-            aria-label="Buscar acolhidos"
+            aria-label="Buscar no histórico"
           />
         </div>
         <button
           type="button"
           className="btn btn-primario btn-novo"
           onClick={onNovo}
-          title="Cadastrar acolhido"
+          title="Cadastrar"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          Novo acolhido
+          Cadastrar
         </button>
       </div>
 
@@ -114,14 +116,14 @@ export default function AcolhidoList({
           <button
             type="button"
             className="btn btn-secundario"
-            onClick={arquivarSelecionados}
+            onClick={() => onRestaurarSelecionados?.(registrosSelecionados())}
           >
-            Enviar ao histórico
+            Restaurar selecionados
           </button>
           <button
             type="button"
             className="btn btn-excluir-massa"
-            onClick={excluirSelecionados}
+            onClick={() => onExcluirSelecionados?.(registrosSelecionados())}
           >
             Excluir selecionados
           </button>
@@ -144,8 +146,7 @@ export default function AcolhidoList({
               </th>
               <th>Nome</th>
               <th>CPF</th>
-              <th>Quarto</th>
-              <th>Email</th>
+              <th>Arquivado em</th>
               <th>Alta</th>
               <th>Ações</th>
             </tr>
@@ -177,8 +178,7 @@ export default function AcolhidoList({
                   </div>
                 </td>
                 <td>{p.cpf}</td>
-                <td>{p.quarto ?? '-'}</td>
-                <td>{p.email ?? '-'}</td>
+                <td>{formatarDataHora(p.arquivadoEm)}</td>
                 <td>
                   {p.alta ? (
                     <span className="alta-status alta-sim">
@@ -235,27 +235,21 @@ export default function AcolhidoList({
                     <span className="acao-label">Anexos</span>
                   </button>
                   <button
-                    className="btn btn-icone btn-arquivar"
-                    onClick={() => onArquivar(p)}
-                    disabled={!p.alta}
-                    title={
-                      p.alta
-                        ? 'Enviar ao histórico'
-                        : 'Só acolhidos com alta podem ir ao histórico'
-                    }
-                    aria-label="Enviar ao histórico"
+                    className="btn btn-icone btn-restaurar"
+                    onClick={() => onRestaurar(p)}
+                    title="Restaurar para a lista de acolhidos"
+                    aria-label="Restaurar"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points="21 8 21 21 3 21 3 8" />
-                      <rect x="1" y="3" width="22" height="5" />
-                      <line x1="10" y1="12" x2="14" y2="12" />
+                      <path d="M3 2v6h6" />
+                      <path d="M3 8a9 9 0 1 0 2.6-4.4L3 8" />
                     </svg>
-                    <span className="acao-label">Histórico</span>
+                    <span className="acao-label">Restaurar</span>
                   </button>
                   <button
                     className="btn btn-icone btn-perigo"
                     onClick={() => onExcluir(p)}
-                    title="Excluir"
+                    title="Excluir definitivamente"
                     aria-label="Excluir"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

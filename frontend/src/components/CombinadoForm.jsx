@@ -11,6 +11,7 @@ const FORM_INICIAL = {
   descricao: '',
   dataIda: '',
   dataVolta: '',
+  dataCombinado: '',
 };
 
 export default function CombinadoForm({
@@ -35,6 +36,7 @@ export default function CombinadoForm({
         descricao: combinadoEditando.descricao ?? '',
         dataIda: isoParaData(combinadoEditando.dataIda),
         dataVolta: isoParaData(combinadoEditando.dataVolta),
+        dataCombinado: isoParaData(combinadoEditando.dataCombinado),
       });
     } else {
       setForm(FORM_INICIAL);
@@ -55,25 +57,31 @@ export default function CombinadoForm({
   const handleChange = (e) => {
     const { name, value } = e.target;
     let novoValor = value;
-    if (name === 'dataIda' || name === 'dataVolta') {
+    if (name === 'dataIda' || name === 'dataVolta' || name === 'dataCombinado') {
       novoValor = maskData(value);
     }
 
     setForm((atual) => {
       const proximo = { ...atual, [name]: novoValor };
-      // ao trocar de tipo para algo diferente de ressocializacao, limpa as datas
-      if (name === 'tipo' && value !== TIPO_RESSOCIALIZACAO) {
-        proximo.dataIda = '';
-        proximo.dataVolta = '';
+      if (name === 'tipo') {
+        if (value === TIPO_RESSOCIALIZACAO) {
+          // Ressocialização usa ida/volta; limpa a data do combinado.
+          proximo.dataCombinado = '';
+        } else {
+          // Demais tipos usam a data do combinado; limpa ida/volta.
+          proximo.dataIda = '';
+          proximo.dataVolta = '';
+        }
       }
       return proximo;
     });
 
-    if (name === 'tipo' && value !== TIPO_RESSOCIALIZACAO) {
+    if (name === 'tipo') {
       setErros((atual) => {
         const copia = { ...atual };
         delete copia.dataIda;
         delete copia.dataVolta;
+        delete copia.dataCombinado;
         return copia;
       });
     }
@@ -118,6 +126,12 @@ export default function CombinadoForm({
       if (isoIda && isoVolta && isoVolta < isoIda) {
         novosErros.dataVolta = 'A data de volta não pode ser anterior à data de ida';
       }
+    } else if (form.tipo) {
+      if (!form.dataCombinado.trim()) {
+        novosErros.dataCombinado = 'Informe a data do combinado';
+      } else if (!dataParaIso(form.dataCombinado)) {
+        novosErros.dataCombinado = 'Data inválida';
+      }
     }
 
     setErros(novosErros);
@@ -134,6 +148,9 @@ export default function CombinadoForm({
       descricao: form.descricao.trim(),
       dataIda: ehRessocializacao ? dataParaIso(form.dataIda) : null,
       dataVolta: ehRessocializacao ? dataParaIso(form.dataVolta) : null,
+      dataCombinado: !ehRessocializacao
+        ? dataParaIso(form.dataCombinado)
+        : null,
     };
     onSalvar(payload);
   };
@@ -177,6 +194,7 @@ export default function CombinadoForm({
             {acolhidosOrdenados.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.nome}
+                {a.cpf ? ` — CPF ${a.cpf}` : ''}
               </option>
             ))}
           </select>
@@ -236,6 +254,22 @@ export default function CombinadoForm({
               {erros.dataVolta && <span className="erro">{erros.dataVolta}</span>}
             </div>
           </>
+        )}
+
+        {form.tipo && !ehRessocializacao && (
+          <div className="campo">
+            <label htmlFor="combinado-data">Data do combinado *</label>
+            <input
+              id="combinado-data"
+              name="dataCombinado"
+              value={form.dataCombinado}
+              onChange={handleChange}
+              placeholder="dd/mm/aaaa"
+              inputMode="numeric"
+              maxLength={10}
+            />
+            {erros.dataCombinado && <span className="erro">{erros.dataCombinado}</span>}
+          </div>
         )}
 
         <div className="campo campo-largo">

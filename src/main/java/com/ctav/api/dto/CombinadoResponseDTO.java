@@ -26,6 +26,7 @@ public class CombinadoResponseDTO {
     private String descricao;
     private LocalDate dataIda;
     private LocalDate dataVolta;
+    private LocalDate dataCombinado;
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
 
@@ -39,6 +40,7 @@ public class CombinadoResponseDTO {
                 .descricao(combinado.getDescricao())
                 .dataIda(combinado.getDataIda())
                 .dataVolta(combinado.getDataVolta())
+                .dataCombinado(combinado.getDataCombinado())
                 .criadoEm(combinado.getCriadoEm())
                 .atualizadoEm(combinado.getAtualizadoEm())
                 .build();

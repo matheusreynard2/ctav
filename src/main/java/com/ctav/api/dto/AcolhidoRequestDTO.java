@@ -63,6 +63,17 @@ public class AcolhidoRequestDTO {
 
     private TipoAlta tipoAlta;
 
+    // Motivo de adesao (obrigatorio) e de desistencia (obrigatorio quando a alta
+    // for por desistencia). Referenciam o id de um Motivo cadastrado pelo usuario.
+    private Long motivoAdesaoId;
+
+    private Long motivoDesistenciaId;
+
+    // Quando true no cadastro, o acolhido ja e criado direto no arquivo
+    // morto/historico (ex.: pessoas que passaram pela comunidade antes do sistema).
+    // Na atualizacao, quando null, mantem o estado atual de arquivamento.
+    private Boolean arquivado;
+
     @Valid
     private List<PrescricaoRequestDTO> prescricoes;
 }

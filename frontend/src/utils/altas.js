@@ -14,10 +14,10 @@ export const TIPOS_ALTA = [
       'Consideramos alta administrativa quando o acolhido infringe uma das normas do regimento interno, bem como agressões físicas e furto, e por esse motivo é impedido de permanecer na comunidade.',
   },
   {
-    valor: 'ABANDONO',
-    rotulo: 'Alta por abandono',
+    valor: 'DESISTENCIA',
+    rotulo: 'Alta por desistência',
     descricao:
-      'Consideramos abandono quando o acolhido, por vontade própria, decide interromper o tratamento em qualquer momento.',
+      'Consideramos desistência quando o acolhido, por vontade própria, decide interromper o tratamento em qualquer momento.',
   },
   {
     valor: 'RECAIDA',

@@ -41,6 +41,7 @@ public class CombinadoService {
                 .descricao(dto.getDescricao())
                 .dataIda(ressocializacao ? dto.getDataIda() : null)
                 .dataVolta(ressocializacao ? dto.getDataVolta() : null)
+                .dataCombinado(ressocializacao ? null : dto.getDataCombinado())
                 .build();
 
         combinadoRepository.persist(combinado);
@@ -70,6 +71,7 @@ public class CombinadoService {
         combinado.setDescricao(dto.getDescricao());
         combinado.setDataIda(ressocializacao ? dto.getDataIda() : null);
         combinado.setDataVolta(ressocializacao ? dto.getDataVolta() : null);
+        combinado.setDataCombinado(ressocializacao ? null : dto.getDataCombinado());
         combinadoRepository.persist(combinado);
         return CombinadoResponseDTO.fromEntity(combinado);
     }
@@ -102,6 +104,8 @@ public class CombinadoService {
                 throw new BusinessException(
                         "A data de volta não pode ser anterior à data de ida.");
             }
+        } else if (dto.getDataCombinado() == null) {
+            throw new BusinessException("Informe a data do combinado.");
         }
     }
 }

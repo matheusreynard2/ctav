@@ -12,6 +12,24 @@ const ITENS_MENU = [
     ],
   },
   {
+    id: 'grupo-motivos',
+    label: 'Motivos',
+    filhos: [
+      { id: 'motivos-adesao', label: 'Lista de adesões' },
+      { id: 'cadastro-motivo-adesao', label: 'Cadastrar motivo de adesão' },
+      { id: 'motivos-desistencia', label: 'Lista de desistências' },
+      { id: 'cadastro-motivo-desistencia', label: 'Cadastrar motivo de desistência' },
+    ],
+  },
+  {
+    id: 'grupo-historico',
+    label: 'Histórico',
+    filhos: [
+      { id: 'historico', label: 'Arquivo morto' },
+      { id: 'cadastro-historico', label: 'Cadastrar' },
+    ],
+  },
+  {
     id: 'grupo-medicamentos',
     label: 'Medicamentos',
     filhos: [

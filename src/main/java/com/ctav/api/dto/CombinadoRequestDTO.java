@@ -34,4 +34,7 @@ public class CombinadoRequestDTO {
     private LocalDate dataIda;
 
     private LocalDate dataVolta;
+
+    // Data do combinado para os tipos que não são ressocialização.
+    private LocalDate dataCombinado;
 }

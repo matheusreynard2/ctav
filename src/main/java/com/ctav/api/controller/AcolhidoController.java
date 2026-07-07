@@ -41,6 +41,25 @@ public class AcolhidoController {
     }
 
     @GET
+    @Path("/historico")
+    public Response listarHistorico() {
+        return Response.ok(acolhidoService.listarHistorico()).build();
+    }
+
+    @POST
+    @Path("/historico")
+    public Response arquivar(List<Long> ids) {
+        int total = acolhidoService.arquivar(ids);
+        return Response.ok(java.util.Map.of("arquivados", total)).build();
+    }
+
+    @POST
+    @Path("/{id}/restaurar")
+    public Response restaurar(@PathParam("id") Long id) {
+        return Response.ok(acolhidoService.restaurar(id)).build();
+    }
+
+    @GET
     @Path("/{id}")
     public Response buscarPorId(@PathParam("id") Long id) {
         return Response.ok(acolhidoService.buscarPorId(id)).build();

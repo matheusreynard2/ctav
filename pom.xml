@@ -85,6 +85,13 @@
 			<groupId>io.quarkiverse.amazonservices</groupId>
 			<artifactId>quarkus-amazon-s3</artifactId>
 		</dependency>
+		<!-- Cliente do AWS SDK usado para invocar a Lambda que gera os PDFs de
+		     relatorios. O client HTTP sincrono (url-connection-client, abaixo) ja
+		     e satisfeito pela dependencia existente. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>lambda</artifactId>
+		</dependency>
 
 		<!-- Autenticacao: geracao/validacao de JWT (HS256) -->
 		<dependency>

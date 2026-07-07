@@ -95,6 +95,27 @@ public class Acolhido {
     @Column(name = "descricao_alta", length = 500)
     private String descricaoAlta;
 
+    // Motivo de adesao: por que o acolhido entrou na comunidade (obrigatorio no
+    // cadastro). Motivo de desistencia: por que interrompeu o tratamento
+    // (obrigatorio quando a alta e por desistencia).
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "motivo_adesao_id")
+    private Motivo motivoAdesao;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "motivo_desistencia_id")
+    private Motivo motivoDesistencia;
+
+    // Indica que o acolhido foi enviado ao arquivo morto/historico.
+    // Quando true, o acolhido some da lista principal mas mantem todos os
+    // dados relacionados (prescricoes, administracoes, anexos, combinados).
+    @Column(name = "arquivado", nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private Boolean arquivado = false;
+
+    @Column(name = "arquivado_em")
+    private LocalDateTime arquivadoEm;
+
     // Chave do objeto no bucket S3 com a foto do acolhido (null = sem foto).
     @Column(name = "foto_chave_s3")
     private String fotoChaveS3;

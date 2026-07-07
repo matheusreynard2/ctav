@@ -251,6 +251,7 @@ export default function ControleMedicamentos({
                 {acolhidosOrdenados.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.nome}
+                    {a.cpf ? ` — CPF ${a.cpf}` : ''}
                     {a.quarto ? ` — Quarto ${a.quarto}` : ''}
                   </option>
                 ))}

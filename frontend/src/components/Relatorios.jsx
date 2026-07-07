@@ -15,6 +15,17 @@ import {
   exportTodosRelatoriosPdf,
 } from '../utils/exportarRelatoriosPdf';
 import GradeControleAdministracao from './GradeControleAdministracao';
+import {
+  GraficoBarras,
+  GraficoDistribuicao,
+  PALETA_GRAFICOS,
+} from './GraficosRelatorio';
+
+// Converte um Map(nome -> contagem) numa lista ordenada por valor (desc).
+const mapaParaDistribuicao = (mapa) =>
+  [...mapa.entries()]
+    .map(([rotulo, valor]) => ({ rotulo, valor }))
+    .sort((a, b) => b.valor - a.valor);
 
 const MESES = [
   'Jan',
@@ -114,6 +125,7 @@ export default function Relatorios({
   const [acolhidoAdminId, setAcolhidoAdminId] = useState('');
   const [registrosAdmin, setRegistrosAdmin] = useState({});
   const [carregandoAdmin, setCarregandoAdmin] = useState(false);
+  const [exportando, setExportando] = useState(false);
 
   const relatorio = useMemo(() => {
     const ano = Number(anoSelecionado);
@@ -122,11 +134,15 @@ export default function Relatorios({
     const registrados = vetorZeros();
     const altasPorTipo = new Map(TIPOS_ALTA.map((t) => [t.valor, vetorZeros()]));
     const totalAltas = vetorZeros();
+    const motivosAdesaoMapa = new Map();
+    const motivosDesistenciaMapa = new Map();
 
     acolhidos.forEach((a) => {
       const acolhimento = partesData(a.dataAcolhimentoCtav);
       if (acolhimento && acolhimento.ano === ano) {
         registrados[acolhimento.mes - 1] += 1;
+        const motivo = a.motivoAdesaoNome || 'Não informado';
+        motivosAdesaoMapa.set(motivo, (motivosAdesaoMapa.get(motivo) ?? 0) + 1);
       }
 
       if (a.alta) {
@@ -135,6 +151,13 @@ export default function Relatorios({
           totalAltas[alta.mes - 1] += 1;
           const vetor = altasPorTipo.get(a.tipoAlta);
           if (vetor) vetor[alta.mes - 1] += 1;
+          if (a.tipoAlta === 'DESISTENCIA') {
+            const motivo = a.motivoDesistenciaNome || 'Não informado';
+            motivosDesistenciaMapa.set(
+              motivo,
+              (motivosDesistenciaMapa.get(motivo) ?? 0) + 1
+            );
+          }
         }
       }
     });
@@ -151,6 +174,8 @@ export default function Relatorios({
       }),
       totalAltas,
       totalAltasAno: somar(totalAltas),
+      motivosAdesao: mapaParaDistribuicao(motivosAdesaoMapa),
+      motivosDesistencia: mapaParaDistribuicao(motivosDesistenciaMapa),
     };
   }, [acolhidos, anoSelecionado]);
 
@@ -167,10 +192,13 @@ export default function Relatorios({
       .map((a) => ({
         id: a.id,
         nome: a.nome,
+        cpf: a.cpf,
         entrada: a.dataAcolhimentoCtav,
         saida: a.dataAlta,
         permanencia: calcularPermanencia(a.dataAcolhimentoCtav, a.dataAlta),
         tipoAltaRotulo: a.tipoAltaRotulo ?? rotuloTipoAlta(a.tipoAlta),
+        motivoDesistencia:
+          a.tipoAlta === 'DESISTENCIA' ? a.motivoDesistenciaNome ?? '-' : '-',
       }))
       .sort((x, y) => (x.saida ?? '').localeCompare(y.saida ?? ''));
   }, [acolhidos, anoSelecionado]);
@@ -246,29 +274,34 @@ export default function Relatorios({
       }
     : null;
 
-  const exportarVisaoAtual = () => {
-    if (!relatorio) return;
-    if (visao === 'mensal') {
-      exportQuadroMensalPdf(relatorio);
-      return;
-    }
-    if (visao === 'altas') {
-      exportAltasPdf(acolhidosComAlta, relatorio.ano);
-      return;
-    }
-    if (dadosControlePdf) {
-      exportControleAdministracaoPdf(dadosControlePdf);
+  const exportarComFeedback = async (acao) => {
+    if (!relatorio || exportando) return;
+    setExportando(true);
+    try {
+      await acao();
+    } catch (e) {
+      onErro?.(e?.message || 'Não foi possível gerar o PDF do relatório. Tente novamente.');
+    } finally {
+      setExportando(false);
     }
   };
 
-  const exportarTodos = () => {
-    if (!relatorio) return;
-    exportTodosRelatoriosPdf({
-      relatorio,
-      acolhidosComAlta,
-      controle: dadosControlePdf,
+  const exportarVisaoAtual = () =>
+    exportarComFeedback(() => {
+      if (visao === 'mensal') return exportQuadroMensalPdf(relatorio);
+      if (visao === 'altas') return exportAltasPdf(acolhidosComAlta, relatorio.ano);
+      if (dadosControlePdf) return exportControleAdministracaoPdf(dadosControlePdf);
+      return Promise.resolve();
     });
-  };
+
+  const exportarTodos = () =>
+    exportarComFeedback(() =>
+      exportTodosRelatoriosPdf({
+        relatorio,
+        acolhidosComAlta,
+        controle: dadosControlePdf,
+      })
+    );
 
   return (
     <section className="card relatorios">
@@ -287,16 +320,17 @@ export default function Relatorios({
               type="button"
               className="btn btn-secundario btn-pequeno"
               onClick={exportarVisaoAtual}
-              disabled={visao === 'administracao' && !dadosControlePdf}
+              disabled={exportando || (visao === 'administracao' && !dadosControlePdf)}
             >
-              Exportar visão (PDF)
+              {exportando ? 'Gerando PDF...' : 'Exportar visão (PDF)'}
             </button>
             <button
               type="button"
               className="btn btn-primario btn-pequeno"
               onClick={exportarTodos}
+              disabled={exportando}
             >
-              Exportar todos (PDF)
+              {exportando ? 'Gerando PDF...' : 'Exportar todos (PDF)'}
             </button>
           </div>
         )}
@@ -361,6 +395,7 @@ export default function Relatorios({
                       {acolhidosOrdenados.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.nome}
+                          {a.cpf ? ` — CPF ${a.cpf}` : ''}
                           {a.quarto ? ` — Quarto ${a.quarto}` : ''}
                         </option>
                       ))}
@@ -388,6 +423,15 @@ export default function Relatorios({
                 onClick={() => setVisao('altas')}
               >
                 Acolhidos com alta
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={visao === 'motivos'}
+                className={`relatorios-visao-btn ${visao === 'motivos' ? 'ativo' : ''}`}
+                onClick={() => setVisao('motivos')}
+              >
+                Motivos
               </button>
               <button
                 type="button"
@@ -474,6 +518,74 @@ export default function Relatorios({
                 &quot;Acolhidos registrados&quot; considera a data de acolhimento na
                 CTAV. As altas são contabilizadas pela data da alta.
               </p>
+
+              <div className="relatorio-graficos">
+                <GraficoBarras
+                  titulo={`Acolhidos registrados por mês (${relatorio.ano})`}
+                  dados={relatorio.registrados.map((valor, i) => ({
+                    rotulo: MESES[i],
+                    valor,
+                  }))}
+                  cor="#2563eb"
+                />
+                <GraficoBarras
+                  titulo={`Altas por mês (${relatorio.ano})`}
+                  dados={relatorio.totalAltas.map((valor, i) => ({
+                    rotulo: MESES[i],
+                    valor,
+                  }))}
+                  cor="#f59e0b"
+                />
+                <GraficoDistribuicao
+                  titulo="Altas por tipo"
+                  itens={relatorio.linhasAlta.map((l, i) => ({
+                    rotulo: l.rotulo,
+                    valor: l.total,
+                    cor: PALETA_GRAFICOS[i % PALETA_GRAFICOS.length],
+                  }))}
+                />
+              </div>
+            </div>
+          ) : visao === 'motivos' ? (
+            <div className="relatorio-quadro">
+              <div className="relatorio-quadro-topo">
+                <h3 className="relatorio-quadro-titulo">
+                  Motivos em {relatorio.ano}
+                </h3>
+                <div className="relatorio-resumo">
+                  <span className="relatorio-chip">
+                    Adesões: <strong>{relatorio.registradosTotal}</strong>
+                  </span>
+                  <span className="relatorio-chip relatorio-chip-alta">
+                    Desistências:{' '}
+                    <strong>
+                      {relatorio.motivosDesistencia.reduce(
+                        (s, m) => s + m.valor,
+                        0
+                      )}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="relatorio-graficos">
+                <GraficoDistribuicao
+                  titulo="Motivos de adesão"
+                  itens={relatorio.motivosAdesao}
+                  vazioTexto="Nenhum acolhido registrado neste ano."
+                />
+                <GraficoDistribuicao
+                  titulo="Motivos de desistência"
+                  itens={relatorio.motivosDesistencia}
+                  vazioTexto="Nenhuma alta por desistência neste ano."
+                />
+              </div>
+
+              <p className="relatorios-legenda">
+                Os motivos de adesão consideram os acolhidos registrados no ano;
+                os motivos de desistência consideram as altas por desistência no
+                ano.
+              </p>
             </div>
           ) : visao === 'altas' ? (
             <div className="relatorio-quadro">
@@ -498,17 +610,20 @@ export default function Relatorios({
                     <thead>
                       <tr>
                         <th>Acolhido</th>
+                        <th>CPF</th>
                         <th>Entrada</th>
                         <th>Saída</th>
                         <th>Permanência (dias)</th>
                         <th>Permanência (meses)</th>
                         <th>Tipo de alta</th>
+                        <th>Motivo da desistência</th>
                       </tr>
                     </thead>
                     <tbody>
                       {acolhidosComAlta.map((a) => (
                         <tr key={a.id}>
                           <td>{a.nome}</td>
+                          <td>{a.cpf ?? '-'}</td>
                           <td>{formatarData(a.entrada)}</td>
                           <td>{formatarData(a.saida)}</td>
                           <td>
@@ -518,6 +633,7 @@ export default function Relatorios({
                           </td>
                           <td>{textoMeses(a.permanencia)}</td>
                           <td>{a.tipoAltaRotulo}</td>
+                          <td>{a.motivoDesistencia}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -540,6 +656,7 @@ export default function Relatorios({
                   <div className="relatorio-resumo">
                     <span className="relatorio-chip">
                       Acolhido: <strong>{acolhidoAdmin.nome}</strong>
+                      {acolhidoAdmin.cpf ? ` — CPF ${acolhidoAdmin.cpf}` : ''}
                     </span>
                   </div>
                 )}
