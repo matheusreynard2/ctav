@@ -40,6 +40,10 @@ public class AcolhidoResponseDTO {
     private String motivoAdesaoNome;
     private Long motivoDesistenciaId;
     private String motivoDesistenciaNome;
+    // Responsavel legal do acolhido (id + nome/conveniado para exibicao).
+    private Long responsavelId;
+    private String responsavelNome;
+    private Boolean responsavelConveniado;
     // Indica se o acolhido esta no arquivo morto/historico e quando foi enviado.
     private Boolean arquivado;
     private LocalDateTime arquivadoEm;
@@ -85,6 +89,15 @@ public class AcolhidoResponseDTO {
                         : null)
                 .motivoDesistenciaNome(acolhido.getMotivoDesistencia() != null
                         ? acolhido.getMotivoDesistencia().getNome()
+                        : null)
+                .responsavelId(acolhido.getResponsavel() != null
+                        ? acolhido.getResponsavel().getId()
+                        : null)
+                .responsavelNome(acolhido.getResponsavel() != null
+                        ? acolhido.getResponsavel().getNome()
+                        : null)
+                .responsavelConveniado(acolhido.getResponsavel() != null
+                        ? acolhido.getResponsavel().getConveniado()
                         : null)
                 .arquivado(acolhido.getArquivado())
                 .arquivadoEm(acolhido.getArquivadoEm())

@@ -69,6 +69,10 @@ public class AcolhidoRequestDTO {
 
     private Long motivoDesistenciaId;
 
+    // Responsavel legal do acolhido (obrigatorio: todo acolhido tem um
+    // responsavel). Referencia o id de um Responsavel cadastrado pelo usuario.
+    private Long responsavelId;
+
     // Quando true no cadastro, o acolhido ja e criado direto no arquivo
     // morto/historico (ex.: pessoas que passaram pela comunidade antes do sistema).
     // Na atualizacao, quando null, mantem o estado atual de arquivamento.

@@ -92,6 +92,28 @@ const textoMeses = (perm) => {
   return `${parteMes} e ${parteDia}`;
 };
 
+// Faixas usadas para distribuir a permanência (em dias) na aba Gráficos.
+const FAIXAS_PERMANENCIA = [
+  { rotulo: 'Até 1 mês', min: 0, max: 30 },
+  { rotulo: '1 a 3 meses', min: 31, max: 90 },
+  { rotulo: '3 a 6 meses', min: 91, max: 180 },
+  { rotulo: '6 meses a 1 ano', min: 181, max: 365 },
+  { rotulo: 'Mais de 1 ano', min: 366, max: Infinity },
+];
+
+// Converte a média (em dias) para um texto amigável em meses e dias.
+const textoMediaDias = (dias) => {
+  if (dias == null || dias < 0) return '-';
+  const meses = Math.floor(dias / 30);
+  const diasRestantes = dias % 30;
+  const partes = [];
+  if (meses > 0) partes.push(`${meses} ${meses === 1 ? 'mês' : 'meses'}`);
+  if (diasRestantes > 0 || meses === 0) {
+    partes.push(`${diasRestantes} ${diasRestantes === 1 ? 'dia' : 'dias'}`);
+  }
+  return partes.join(' e ');
+};
+
 export default function Relatorios({
   acolhidos = [],
   carregando = false,
@@ -202,6 +224,39 @@ export default function Relatorios({
       }))
       .sort((x, y) => (x.saida ?? '').localeCompare(y.saida ?? ''));
   }, [acolhidos, anoSelecionado]);
+
+  // Média de permanência: considera apenas as altas do ano que possuem data de
+  // entrada E data de saída (permanência calculável e não negativa). Também
+  // distribui essas permanências em faixas para exibição em porcentagem.
+  const mediaPermanencia = useMemo(() => {
+    const validos = acolhidosComAlta.filter(
+      (a) => a.permanencia && Number.isFinite(a.permanencia.dias) && a.permanencia.dias >= 0
+    );
+
+    const contagemFaixas = FAIXAS_PERMANENCIA.map((faixa) => ({
+      rotulo: faixa.rotulo,
+      valor: 0,
+    }));
+
+    let totalDias = 0;
+    validos.forEach((a) => {
+      const dias = a.permanencia.dias;
+      totalDias += dias;
+      const indice = FAIXAS_PERMANENCIA.findIndex(
+        (faixa) => dias >= faixa.min && dias <= faixa.max
+      );
+      if (indice >= 0) contagemFaixas[indice].valor += 1;
+    });
+
+    const quantidade = validos.length;
+    const mediaDias = quantidade ? Math.round(totalDias / quantidade) : 0;
+
+    return {
+      quantidade,
+      mediaDias,
+      faixas: contagemFaixas,
+    };
+  }, [acolhidosComAlta]);
 
   const acolhidoAdmin = useMemo(
     () =>
@@ -427,11 +482,11 @@ export default function Relatorios({
               <button
                 type="button"
                 role="tab"
-                aria-selected={visao === 'motivos'}
-                className={`relatorios-visao-btn ${visao === 'motivos' ? 'ativo' : ''}`}
-                onClick={() => setVisao('motivos')}
+                aria-selected={visao === 'graficos'}
+                className={`relatorios-visao-btn ${visao === 'graficos' ? 'ativo' : ''}`}
+                onClick={() => setVisao('graficos')}
               >
-                Motivos
+                Gráficos
               </button>
               <button
                 type="button"
@@ -546,11 +601,11 @@ export default function Relatorios({
                 />
               </div>
             </div>
-          ) : visao === 'motivos' ? (
+          ) : visao === 'graficos' ? (
             <div className="relatorio-quadro">
               <div className="relatorio-quadro-topo">
                 <h3 className="relatorio-quadro-titulo">
-                  Motivos em {relatorio.ano}
+                  Gráficos em {relatorio.ano}
                 </h3>
                 <div className="relatorio-resumo">
                   <span className="relatorio-chip">
@@ -565,10 +620,29 @@ export default function Relatorios({
                       )}
                     </strong>
                   </span>
+                  <span className="relatorio-chip">
+                    Média de permanência:{' '}
+                    <strong>
+                      {mediaPermanencia.quantidade
+                        ? `${mediaPermanencia.mediaDias} dias (${textoMediaDias(
+                            mediaPermanencia.mediaDias
+                          )})`
+                        : '—'}
+                    </strong>
+                  </span>
                 </div>
               </div>
 
               <div className="relatorio-graficos">
+                <GraficoDistribuicao
+                  titulo={`Média de permanência dos acolhidos${
+                    mediaPermanencia.quantidade
+                      ? ` — ${mediaPermanencia.mediaDias} dias em média`
+                      : ''
+                  }`}
+                  itens={mediaPermanencia.faixas}
+                  vazioTexto="Nenhuma alta com data de entrada e saída neste ano."
+                />
                 <GraficoDistribuicao
                   titulo="Motivos de adesão"
                   itens={relatorio.motivosAdesao}
@@ -582,9 +656,11 @@ export default function Relatorios({
               </div>
 
               <p className="relatorios-legenda">
-                Os motivos de adesão consideram os acolhidos registrados no ano;
-                os motivos de desistência consideram as altas por desistência no
-                ano.
+                A média de permanência considera somente as altas do ano que têm
+                data de entrada (acolhimento) e data de saída (alta); cada faixa
+                mostra a quantidade de acolhidos e o percentual sobre esse total.
+                Os motivos de adesão consideram os acolhidos registrados no ano e
+                os de desistência consideram as altas por desistência no ano.
               </p>
             </div>
           ) : visao === 'altas' ? (

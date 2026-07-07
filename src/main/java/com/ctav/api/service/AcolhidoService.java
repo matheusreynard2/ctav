@@ -7,6 +7,7 @@ import com.ctav.api.entity.Acolhido;
 import com.ctav.api.entity.Medicamento;
 import com.ctav.api.entity.Motivo;
 import com.ctav.api.entity.Prescricao;
+import com.ctav.api.entity.Responsavel;
 import com.ctav.api.enums.CategoriaMotivo;
 import com.ctav.api.exception.BusinessException;
 import com.ctav.api.exception.ResourceNotFoundException;
@@ -14,6 +15,7 @@ import com.ctav.api.repository.AcolhidoRepository;
 import com.ctav.api.repository.AdministracaoRepository;
 import com.ctav.api.repository.CombinadoRepository;
 import com.ctav.api.repository.MedicamentoRepository;
+import com.ctav.api.repository.OcorrenciaRepository;
 import com.ctav.api.enums.TipoAlta;
 import com.ctav.api.security.UsuarioContext;
 
@@ -56,10 +58,16 @@ public class AcolhidoService {
     MotivoService motivoService;
 
     @Inject
+    ResponsavelService responsavelService;
+
+    @Inject
     CombinadoRepository combinadoRepository;
 
     @Inject
     AdministracaoRepository administracaoRepository;
+
+    @Inject
+    OcorrenciaRepository ocorrenciaRepository;
 
     @Inject
     UsuarioContext usuarioContext;
@@ -82,6 +90,7 @@ public class AcolhidoService {
 
         Motivo motivoAdesao = resolverMotivoAdesao(dto.getMotivoAdesaoId());
         Motivo motivoDesistencia = resolverMotivoDesistencia(dto);
+        Responsavel responsavel = resolverResponsavel(dto.getResponsavelId());
 
         Acolhido acolhido = Acolhido.builder()
                 .usuario(usuarioContext.referencia())
@@ -100,6 +109,7 @@ public class AcolhidoService {
                 .descricaoAlta(descricaoAltaEfetiva(dto))
                 .motivoAdesao(motivoAdesao)
                 .motivoDesistencia(motivoDesistencia)
+                .responsavel(responsavel)
                 .arquivado(Boolean.TRUE.equals(dto.getArquivado()))
                 .arquivadoEm(Boolean.TRUE.equals(dto.getArquivado())
                         ? LocalDateTime.now()
@@ -207,6 +217,7 @@ public class AcolhidoService {
         acolhido.setDescricaoAlta(descricaoAltaEfetiva(dto));
         acolhido.setMotivoAdesao(resolverMotivoAdesao(dto.getMotivoAdesaoId()));
         acolhido.setMotivoDesistencia(resolverMotivoDesistencia(dto));
+        acolhido.setResponsavel(resolverResponsavel(dto.getResponsavelId()));
         // So altera o arquivamento quando o cliente envia explicitamente o campo,
         // preservando o estado atual em edicoes normais (form nao envia o campo).
         if (dto.getArquivado() != null) {
@@ -234,6 +245,10 @@ public class AcolhidoService {
         // (As prescricoes saem em cascata via orphanRemoval do OneToMany.)
         combinadoRepository.deleteByAcolhidoIdAndUsuario(id, usuarioContext.id());
         administracaoRepository.deleteByAcolhidoId(id);
+        // As ocorrencias nao sao excluidas: apenas os vinculos deste acolhido
+        // sao removidos, permanecendo na lista para consulta/edicao (os nomes
+        // ficam preservados no snapshot da ocorrencia).
+        ocorrenciaRepository.desvincularAcolhido(id);
         acolhidoRepository.delete(acolhido);
     }
 
@@ -276,6 +291,14 @@ public class AcolhidoService {
             throw new BusinessException("O motivo de adesão é obrigatório.");
         }
         return motivoService.obterDoUsuario(id, CategoriaMotivo.ADESAO);
+    }
+
+    // Responsavel e sempre obrigatorio (todo acolhido tem um responsavel).
+    private Responsavel resolverResponsavel(Long id) {
+        if (id == null) {
+            throw new BusinessException("O responsável é obrigatório.");
+        }
+        return responsavelService.obterDoUsuario(id);
     }
 
     // Motivo de desistencia so se aplica (e e obrigatorio) quando a alta e por

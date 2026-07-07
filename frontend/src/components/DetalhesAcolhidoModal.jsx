@@ -63,7 +63,12 @@ const Campo = ({ label, valor, largo = false }) => (
   </div>
 );
 
-export default function DetalhesAcolhidoModal({ acolhido, combinados = [], onFechar }) {
+export default function DetalhesAcolhidoModal({
+  acolhido,
+  combinados = [],
+  ocorrencias = [],
+  onFechar,
+}) {
   const acolhidoId = acolhido?.id ?? null;
 
   const [aba, setAba] = useState('dados');
@@ -137,6 +142,8 @@ export default function DetalhesAcolhidoModal({ acolhido, combinados = [], onFec
 
   const listaCombinados = Array.isArray(combinados) ? combinados : [];
 
+  const listaOcorrencias = Array.isArray(ocorrencias) ? ocorrencias : [];
+
   const temDoses = (p) =>
     (p.doseManha ?? 0) > 0 || (p.doseTarde ?? 0) > 0 || (p.doseNoite ?? 0) > 0;
 
@@ -157,6 +164,7 @@ export default function DetalhesAcolhidoModal({ acolhido, combinados = [], onFec
     { id: 'dados', rotulo: 'Dados' },
     { id: 'medicacoes', rotulo: `Medicações (${prescricoes.length})` },
     { id: 'combinados', rotulo: `Combinados (${listaCombinados.length})` },
+    { id: 'ocorrencias', rotulo: `Ocorrências (${listaOcorrencias.length})` },
     {
       id: 'anexos',
       rotulo: `Anexos${carregandoAnexos ? '' : ` (${anexos.length})`}`,
@@ -239,6 +247,16 @@ export default function DetalhesAcolhidoModal({ acolhido, combinados = [], onFec
                   <Campo
                     label="Motivo de adesão"
                     valor={acolhido.motivoAdesaoNome}
+                  />
+                  <Campo
+                    label="Responsável"
+                    valor={
+                      acolhido.responsavelNome
+                        ? `${acolhido.responsavelNome}${
+                            acolhido.responsavelConveniado ? ' (conveniado)' : ''
+                          }`
+                        : null
+                    }
                   />
                 </div>
               </section>
@@ -368,6 +386,45 @@ export default function DetalhesAcolhidoModal({ acolhido, combinados = [], onFec
                 </ul>
               ) : (
                 <p className="detalhes-vazio">Nenhum combinado registrado.</p>
+              )}
+            </section>
+          )}
+
+          {aba === 'ocorrencias' && (
+            <section className="detalhes-secao">
+              <h4 className="detalhes-secao-titulo">Ocorrências</h4>
+              {listaOcorrencias.length > 0 ? (
+                <ul className="detalhes-ocorrencias">
+                  {listaOcorrencias.map((o, i) => {
+                    const desc = o?.descricao ? String(o.descricao).trim() : '';
+                    const chave = o?.id ?? `${o?.titulo ?? 'ocorrencia'}-${i}`;
+                    const envolvidos = (o.acolhidoIds?.length ?? 0) > 1
+                      ? o.acolhidosResumo
+                      : null;
+                    return (
+                      <li key={chave}>
+                        <span className="detalhes-ocorrencia-titulo">
+                          {o.titulo ?? '-'}
+                        </span>
+                        {o.dataOcorrencia ? (
+                          <span className="detalhes-ocorrencia-data">
+                            {`Data: ${formatarData(o.dataOcorrencia)}`}
+                          </span>
+                        ) : null}
+                        {envolvidos ? (
+                          <span className="detalhes-ocorrencia-data">
+                            {`Envolvidos: ${envolvidos}`}
+                          </span>
+                        ) : null}
+                        {desc ? (
+                          <span className="detalhes-ocorrencia-descricao">{desc}</span>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="detalhes-vazio">Nenhuma ocorrência registrada.</p>
               )}
             </section>
           )}

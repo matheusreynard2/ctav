@@ -6,10 +6,14 @@ import {
   combinadoService,
   medicamentoService,
   motivoService,
+  ocorrenciaService,
+  responsavelService,
 } from './api';
 import Login from './components/Login.jsx';
 import DetalhesAcolhidoModal from './components/DetalhesAcolhidoModal.jsx';
 import DetalhesCombinadoModal from './components/DetalhesCombinadoModal.jsx';
+import DetalhesOcorrenciaModal from './components/DetalhesOcorrenciaModal.jsx';
+import DetalhesResponsavelModal from './components/DetalhesResponsavelModal.jsx';
 import GerenciarAnexosModal from './components/GerenciarAnexosModal.jsx';
 import Header from './components/Header.jsx';
 import ModalConfirmacao from './components/ModalConfirmacao.jsx';
@@ -23,6 +27,10 @@ import MotivoForm from './components/MotivoForm.jsx';
 import MotivoList from './components/MotivoList.jsx';
 import CombinadoForm from './components/CombinadoForm.jsx';
 import CombinadoList from './components/CombinadoList.jsx';
+import OcorrenciaForm from './components/OcorrenciaForm.jsx';
+import OcorrenciaList from './components/OcorrenciaList.jsx';
+import ResponsavelForm from './components/ResponsavelForm.jsx';
+import ResponsavelList from './components/ResponsavelList.jsx';
 import Relatorios from './components/Relatorios.jsx';
 import ControleMedicamentos from './components/ControleMedicamentos.jsx';
 import { exportTutorialPdf } from './utils/exportarRelatoriosPdf';
@@ -75,6 +83,23 @@ export default function App() {
   const [combinadoSelecionado, setCombinadoSelecionado] = useState(null);
   const [combinadoParaExcluir, setCombinadoParaExcluir] = useState(null);
   const [excluindoCombinado, setExcluindoCombinado] = useState(false);
+
+  const [ocorrencias, setOcorrencias] = useState([]);
+  const [carregandoOcorrencias, setCarregandoOcorrencias] = useState(false);
+  const [salvandoOcorrencia, setSalvandoOcorrencia] = useState(false);
+  const [ocorrenciaEditando, setOcorrenciaEditando] = useState(null);
+  const [ocorrenciaSelecionada, setOcorrenciaSelecionada] = useState(null);
+  const [ocorrenciaParaExcluir, setOcorrenciaParaExcluir] = useState(null);
+  const [excluindoOcorrencia, setExcluindoOcorrencia] = useState(false);
+  const [salvandoOcorrenciaInline, setSalvandoOcorrenciaInline] = useState(false);
+
+  const [responsaveis, setResponsaveis] = useState([]);
+  const [carregandoResponsaveis, setCarregandoResponsaveis] = useState(false);
+  const [salvandoResponsavel, setSalvandoResponsavel] = useState(false);
+  const [responsavelEditando, setResponsavelEditando] = useState(null);
+  const [responsavelSelecionado, setResponsavelSelecionado] = useState(null);
+  const [responsavelParaExcluir, setResponsavelParaExcluir] = useState(null);
+  const [excluindoResponsavel, setExcluindoResponsavel] = useState(false);
 
   // Modal unico para todas as mensagens (sucesso, erro, atualizacoes, etc.).
   const [modal, setModal] = useState(null); // { id, tipo, texto, paginaDestino }
@@ -180,6 +205,30 @@ export default function App() {
     }
   };
 
+  const carregarOcorrencias = async () => {
+    setCarregandoOcorrencias(true);
+    try {
+      const dados = await ocorrenciaService.listar();
+      setOcorrencias(Array.isArray(dados) ? dados : []);
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar ocorrências.'));
+    } finally {
+      setCarregandoOcorrencias(false);
+    }
+  };
+
+  const carregarResponsaveis = async () => {
+    setCarregandoResponsaveis(true);
+    try {
+      const dados = await responsavelService.listar();
+      setResponsaveis(Array.isArray(dados) ? dados : []);
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar responsáveis.'));
+    } finally {
+      setCarregandoResponsaveis(false);
+    }
+  };
+
   // Verifica a sessao ao abrir o app (cookie HttpOnly enviado automaticamente).
   useEffect(() => {
     let ativo = true;
@@ -214,6 +263,8 @@ export default function App() {
     carregarMedicamentos();
     carregarMotivos();
     carregarCombinados();
+    carregarOcorrencias();
+    carregarResponsaveis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario]);
 
@@ -223,6 +274,8 @@ export default function App() {
     setMedicamentoEditando(null);
     setMotivoEditando(null);
     setCombinadoEditando(null);
+    setOcorrenciaEditando(null);
+    setResponsavelEditando(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -245,6 +298,12 @@ export default function App() {
     } else if (destino === 'combinados') {
       setCombinadoEditando(null);
       setPagina('combinados');
+    } else if (destino === 'ocorrencias') {
+      setOcorrenciaEditando(null);
+      setPagina('ocorrencias');
+    } else if (destino === 'responsaveis') {
+      setResponsavelEditando(null);
+      setPagina('responsaveis');
     } else if (destino === 'motivos-adesao') {
       setMotivoEditando(null);
       setPagina('motivos-adesao');
@@ -429,6 +488,7 @@ export default function App() {
       await carregarAcolhidos();
       await carregarHistorico();
       await carregarCombinados();
+      await carregarOcorrencias();
     } catch (err) {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir acolhido.'));
     } finally {
@@ -728,6 +788,175 @@ export default function App() {
     }
   };
 
+  const handleSalvarOcorrencia = async (dados) => {
+    setSalvandoOcorrencia(true);
+    try {
+      if (ocorrenciaEditando) {
+        await ocorrenciaService.atualizar(ocorrenciaEditando.id, dados);
+        await carregarOcorrencias();
+        abrirModalSucesso('Ocorrência atualizada com sucesso.', 'ocorrencias');
+      } else {
+        await ocorrenciaService.criar(dados);
+        setOcorrenciaEditando(null);
+        await carregarOcorrencias();
+        abrirModalSucesso('Ocorrência cadastrada com sucesso.', 'ocorrencias');
+      }
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar ocorrência.'));
+    } finally {
+      setSalvandoOcorrencia(false);
+    }
+  };
+
+  const handleExibirOcorrencia = (ocorrencia) => {
+    setOcorrenciaSelecionada(ocorrencia);
+  };
+
+  const handleFecharDetalhesOcorrencia = () => {
+    setOcorrenciaSelecionada(null);
+  };
+
+  const handleEditarOcorrencia = (ocorrencia) => {
+    setOcorrenciaEditando(ocorrencia);
+    setPagina('cadastro-ocorrencia');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelarEdicaoOcorrencia = () => {
+    setOcorrenciaEditando(null);
+    setPagina('ocorrencias');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleExcluirOcorrencia = (ocorrencia) => {
+    setOcorrenciaParaExcluir(ocorrencia);
+  };
+
+  const cancelarExclusaoOcorrencia = () => {
+    if (excluindoOcorrencia) return;
+    setOcorrenciaParaExcluir(null);
+  };
+
+  const confirmarExclusaoOcorrencia = async () => {
+    if (!ocorrenciaParaExcluir) return;
+    setExcluindoOcorrencia(true);
+    try {
+      await ocorrenciaService.deletar(ocorrenciaParaExcluir.id);
+      mostrarMensagem('sucesso', 'Ocorrência excluída com sucesso.');
+      if (ocorrenciaEditando?.id === ocorrenciaParaExcluir.id) {
+        setOcorrenciaEditando(null);
+      }
+      setOcorrenciaParaExcluir(null);
+      await carregarOcorrencias();
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir ocorrência.'));
+    } finally {
+      setExcluindoOcorrencia(false);
+    }
+  };
+
+  // Callbacks para a gestão inline de ocorrências dentro da edição do acolhido.
+  const handleCriarOcorrenciaInline = async (dados) => {
+    setSalvandoOcorrenciaInline(true);
+    try {
+      await ocorrenciaService.criar(dados);
+      await carregarOcorrencias();
+      mostrarMensagem('sucesso', 'Ocorrência adicionada com sucesso.');
+      return true;
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao adicionar ocorrência.'));
+      return false;
+    } finally {
+      setSalvandoOcorrenciaInline(false);
+    }
+  };
+
+  const handleAtualizarOcorrenciaInline = async (id, dados) => {
+    setSalvandoOcorrenciaInline(true);
+    try {
+      await ocorrenciaService.atualizar(id, dados);
+      await carregarOcorrencias();
+      mostrarMensagem('sucesso', 'Ocorrência atualizada com sucesso.');
+      return true;
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao atualizar ocorrência.'));
+      return false;
+    } finally {
+      setSalvandoOcorrenciaInline(false);
+    }
+  };
+
+  const handleSalvarResponsavel = async (dados) => {
+    setSalvandoResponsavel(true);
+    try {
+      if (responsavelEditando) {
+        await responsavelService.atualizar(responsavelEditando.id, dados);
+        await carregarResponsaveis();
+        // O nome do responsável é derivado do relacionamento; recarrega os
+        // acolhidos (ativos e do histórico) para refletir a alteração.
+        await carregarAcolhidos();
+        await carregarHistorico();
+        abrirModalSucesso('Responsável atualizado com sucesso.', 'responsaveis');
+      } else {
+        await responsavelService.criar(dados);
+        setResponsavelEditando(null);
+        await carregarResponsaveis();
+        abrirModalSucesso('Responsável cadastrado com sucesso.', 'responsaveis');
+      }
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar responsável.'));
+    } finally {
+      setSalvandoResponsavel(false);
+    }
+  };
+
+  const handleExibirResponsavel = (responsavel) => {
+    setResponsavelSelecionado(responsavel);
+  };
+
+  const handleFecharDetalhesResponsavel = () => {
+    setResponsavelSelecionado(null);
+  };
+
+  const handleEditarResponsavel = (responsavel) => {
+    setResponsavelEditando(responsavel);
+    setPagina('cadastro-responsavel');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelarEdicaoResponsavel = () => {
+    setResponsavelEditando(null);
+    setPagina('responsaveis');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleExcluirResponsavel = (responsavel) => {
+    setResponsavelParaExcluir(responsavel);
+  };
+
+  const cancelarExclusaoResponsavel = () => {
+    if (excluindoResponsavel) return;
+    setResponsavelParaExcluir(null);
+  };
+
+  const confirmarExclusaoResponsavel = async () => {
+    if (!responsavelParaExcluir) return;
+    setExcluindoResponsavel(true);
+    try {
+      await responsavelService.deletar(responsavelParaExcluir.id);
+      mostrarMensagem('sucesso', 'Responsável excluído com sucesso.');
+      if (responsavelEditando?.id === responsavelParaExcluir.id) {
+        setResponsavelEditando(null);
+      }
+      setResponsavelParaExcluir(null);
+      await carregarResponsaveis();
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir responsável.'));
+    } finally {
+      setExcluindoResponsavel(false);
+    }
+  };
+
   const handleExcluirSelecionados = (tipo, registros) => {
     if (!registros?.length) return;
     setExclusaoEmMassa({ tipo, registros });
@@ -748,7 +977,11 @@ export default function App() {
           ? medicamentoService
           : tipo === 'motivo'
             ? motivoService
-            : combinadoService;
+            : tipo === 'ocorrencia'
+              ? ocorrenciaService
+              : tipo === 'responsavel'
+                ? responsavelService
+                : combinadoService;
 
     setExcluindoEmMassa(true);
     let sucesso = 0;
@@ -766,10 +999,15 @@ export default function App() {
       await carregarAcolhidos();
       await carregarHistorico();
       await carregarCombinados();
+      await carregarOcorrencias();
     } else if (tipo === 'medicamento') {
       await carregarMedicamentos();
     } else if (tipo === 'motivo') {
       await carregarMotivos();
+    } else if (tipo === 'ocorrencia') {
+      await carregarOcorrencias();
+    } else if (tipo === 'responsavel') {
+      await carregarResponsaveis();
     } else {
       await carregarCombinados();
     }
@@ -807,6 +1045,8 @@ export default function App() {
     setMotivosAdesao([]);
     setMotivosDesistencia([]);
     setCombinados([]);
+    setOcorrencias([]);
+    setResponsaveis([]);
   };
 
   const mostrarDescricao = pagina === 'inicio';
@@ -818,6 +1058,10 @@ export default function App() {
   const mostrarListaMedicamentos = pagina === 'medicamentos';
   const mostrarFormCombinado = pagina === 'cadastro-combinado';
   const mostrarListaCombinados = pagina === 'combinados';
+  const mostrarFormOcorrencia = pagina === 'cadastro-ocorrencia';
+  const mostrarListaOcorrencias = pagina === 'ocorrencias';
+  const mostrarFormResponsavel = pagina === 'cadastro-responsavel';
+  const mostrarListaResponsaveis = pagina === 'responsaveis';
   const mostrarRelatorios = pagina === 'relatorios';
   const mostrarControleMedicamentos = pagina === 'controle-medicamentos';
   const mostrarListaMotivosAdesao = pagina === 'motivos-adesao';
@@ -831,6 +1075,15 @@ export default function App() {
     () => [...acolhidos, ...historico],
     [acolhidos, historico]
   );
+
+  // Ocorrências vinculadas ao acolhido em edição (usadas na aba Ocorrências do
+  // formulário de edição, tanto de acolhidos ativos quanto do histórico).
+  const ocorrenciasDoAcolhidoEditando = useMemo(() => {
+    if (!acolhidoEditando?.id) return [];
+    return ocorrencias.filter((o) =>
+      (o.acolhidoIds ?? []).includes(acolhidoEditando.id)
+    );
+  }, [ocorrencias, acolhidoEditando]);
 
   // Atalhos exibidos na página inicial. Cada card leva para a página do
   // respectivo conteúdo gerenciado pelo sistema.
@@ -879,6 +1132,31 @@ export default function App() {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9 11 3 5l6-2 6 2 6-2v14l-6 2-6-2-6 2V11" />
           <path d="M9 3v16M15 5v16" />
+        </svg>
+      ),
+    },
+    {
+      id: 'ocorrencias',
+      titulo: 'Ocorrências',
+      descricao: 'Registre e acompanhe ocorrências dos acolhidos.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      ),
+    },
+    {
+      id: 'responsaveis',
+      titulo: 'Responsáveis',
+      descricao: 'Cadastre os responsáveis legais dos acolhidos.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
         </svg>
       ),
     },
@@ -1060,6 +1338,13 @@ export default function App() {
             medicamentosDisponiveis={medicamentos}
             motivosAdesao={motivosAdesao}
             motivosDesistencia={motivosDesistencia}
+            responsaveisDisponiveis={responsaveis}
+            acolhidosDisponiveis={acolhidosParaRelatorios}
+            ocorrenciasDoAcolhido={ocorrenciasDoAcolhidoEditando}
+            onCriarOcorrencia={handleCriarOcorrenciaInline}
+            onAtualizarOcorrencia={handleAtualizarOcorrenciaInline}
+            onExcluirOcorrencia={handleExcluirOcorrencia}
+            salvandoOcorrencia={salvandoOcorrenciaInline}
             onSalvar={handleSalvarAcolhido}
             onCancelar={handleCancelarEdicaoAcolhido}
             onVerLista={() => handleNavegar('acolhidos')}
@@ -1090,7 +1375,14 @@ export default function App() {
             medicamentosDisponiveis={medicamentos}
             motivosAdesao={motivosAdesao}
             motivosDesistencia={motivosDesistencia}
+            responsaveisDisponiveis={responsaveis}
             modoHistorico
+            acolhidosDisponiveis={acolhidosParaRelatorios}
+            ocorrenciasDoAcolhido={ocorrenciasDoAcolhidoEditando}
+            onCriarOcorrencia={handleCriarOcorrenciaInline}
+            onAtualizarOcorrencia={handleAtualizarOcorrenciaInline}
+            onExcluirOcorrencia={handleExcluirOcorrencia}
+            salvandoOcorrencia={salvandoOcorrenciaInline}
             onSalvar={handleSalvarHistorico}
             onCancelar={() => handleNavegar('historico')}
             onVerLista={() => handleNavegar('historico')}
@@ -1160,6 +1452,55 @@ export default function App() {
               handleExcluirSelecionados('combinado', registros)
             }
             onNovo={() => handleNavegar('cadastro-combinado')}
+          />
+        )}
+
+        {mostrarFormOcorrencia && (
+          <OcorrenciaForm
+            ocorrenciaEditando={ocorrenciaEditando}
+            acolhidosDisponiveis={acolhidosParaRelatorios}
+            onSalvar={handleSalvarOcorrencia}
+            onCancelar={handleCancelarEdicaoOcorrencia}
+            onVerLista={() => handleNavegar('ocorrencias')}
+            salvando={salvandoOcorrencia}
+          />
+        )}
+
+        {mostrarListaOcorrencias && (
+          <OcorrenciaList
+            ocorrencias={ocorrencias}
+            carregando={carregandoOcorrencias}
+            onExibir={handleExibirOcorrencia}
+            onEditar={handleEditarOcorrencia}
+            onExcluir={handleExcluirOcorrencia}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('ocorrencia', registros)
+            }
+            onNovo={() => handleNavegar('cadastro-ocorrencia')}
+          />
+        )}
+
+        {mostrarFormResponsavel && (
+          <ResponsavelForm
+            responsavelEditando={responsavelEditando}
+            onSalvar={handleSalvarResponsavel}
+            onCancelar={handleCancelarEdicaoResponsavel}
+            onVerLista={() => handleNavegar('responsaveis')}
+            salvando={salvandoResponsavel}
+          />
+        )}
+
+        {mostrarListaResponsaveis && (
+          <ResponsavelList
+            responsaveis={responsaveis}
+            carregando={carregandoResponsaveis}
+            onExibir={handleExibirResponsavel}
+            onEditar={handleEditarResponsavel}
+            onExcluir={handleExcluirResponsavel}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('responsavel', registros)
+            }
+            onNovo={() => handleNavegar('cadastro-responsavel')}
           />
         )}
 
@@ -1243,12 +1584,29 @@ export default function App() {
             ? combinados.filter((c) => c.acolhidoId === acolhidoSelecionado.id)
             : []
         }
+        ocorrencias={
+          acolhidoSelecionado
+            ? ocorrencias.filter((o) =>
+                (o.acolhidoIds ?? []).includes(acolhidoSelecionado.id)
+              )
+            : []
+        }
         onFechar={handleFecharDetalhesAcolhido}
       />
 
       <DetalhesCombinadoModal
         combinado={combinadoSelecionado}
         onFechar={handleFecharDetalhesCombinado}
+      />
+
+      <DetalhesOcorrenciaModal
+        ocorrencia={ocorrenciaSelecionada}
+        onFechar={handleFecharDetalhesOcorrencia}
+      />
+
+      <DetalhesResponsavelModal
+        responsavel={responsavelSelecionado}
+        onFechar={handleFecharDetalhesResponsavel}
       />
 
       <GerenciarAnexosModal
@@ -1346,6 +1704,40 @@ export default function App() {
         perigo
         onConfirmar={confirmarExclusaoCombinado}
         onCancelar={cancelarExclusaoCombinado}
+      />
+
+      <ModalConfirmacao
+        aberto={Boolean(ocorrenciaParaExcluir)}
+        titulo="Excluir ocorrência"
+        mensagem={
+          ocorrenciaParaExcluir
+            ? `Deseja realmente excluir a ocorrência "${ocorrenciaParaExcluir.titulo ?? ''}"${
+                ocorrenciaParaExcluir.acolhidosResumo
+                  ? ` (${ocorrenciaParaExcluir.acolhidosResumo})`
+                  : ''
+              }? Esta ação não pode ser desfeita.`
+            : ''
+        }
+        textoConfirmar={excluindoOcorrencia ? 'Excluindo...' : 'Excluir'}
+        textoCancelar="Cancelar"
+        perigo
+        onConfirmar={confirmarExclusaoOcorrencia}
+        onCancelar={cancelarExclusaoOcorrencia}
+      />
+
+      <ModalConfirmacao
+        aberto={Boolean(responsavelParaExcluir)}
+        titulo="Excluir responsável"
+        mensagem={
+          responsavelParaExcluir
+            ? `Deseja realmente excluir o responsável "${responsavelParaExcluir.nome}"? Esta ação não pode ser desfeita.`
+            : ''
+        }
+        textoConfirmar={excluindoResponsavel ? 'Excluindo...' : 'Excluir'}
+        textoCancelar="Cancelar"
+        perigo
+        onConfirmar={confirmarExclusaoResponsavel}
+        onCancelar={cancelarExclusaoResponsavel}
       />
 
       <ModalConfirmacao

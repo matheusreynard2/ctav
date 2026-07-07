@@ -93,6 +93,14 @@ export const motivoService = {
   deletar: (id) => api.delete(`/motivos/${id}`),
 };
 
+export const responsavelService = {
+  listar: () => api.get('/responsaveis').then(extrairLista),
+  buscarPorId: (id) => api.get(`/responsaveis/${id}`).then(extrairRegistro),
+  criar: (dados) => api.post('/responsaveis', dados).then(extrairRegistro),
+  atualizar: (id, dados) => api.put(`/responsaveis/${id}`, dados).then(extrairRegistro),
+  deletar: (id) => api.delete(`/responsaveis/${id}`),
+};
+
 export const prescricaoService = {
   atualizarDoses: (acolhidoId, prescricoes) =>
     api
@@ -151,6 +159,14 @@ export const combinadoService = {
   criar: (dados) => api.post('/combinados', dados).then(extrairRegistro),
   atualizar: (id, dados) => api.put(`/combinados/${id}`, dados).then(extrairRegistro),
   deletar: (id) => api.delete(`/combinados/${id}`),
+};
+
+export const ocorrenciaService = {
+  listar: () => api.get('/ocorrencias').then(extrairLista),
+  buscarPorId: (id) => api.get(`/ocorrencias/${id}`).then(extrairRegistro),
+  criar: (dados) => api.post('/ocorrencias', dados).then(extrairRegistro),
+  atualizar: (id, dados) => api.put(`/ocorrencias/${id}`, dados).then(extrairRegistro),
+  deletar: (id) => api.delete(`/ocorrencias/${id}`),
 };
 
 export const anexoService = {

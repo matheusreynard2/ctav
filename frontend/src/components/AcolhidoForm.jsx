@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import InputArquivoCustomizado from './InputArquivoCustomizado.jsx';
+import OcorrenciasDoAcolhido from './OcorrenciasDoAcolhido.jsx';
 import { TIPOS_ALTA } from '../utils/altas';
 import { TIPOS_COMBINADO, TIPO_RESSOCIALIZACAO } from '../utils/combinados';
 import {
@@ -47,6 +48,7 @@ const FORM_INICIAL = {
   tipoAlta: '',
   motivoAdesaoId: '',
   motivoDesistenciaId: '',
+  responsavelId: '',
 };
 
 const hojeComoIso = () => {
@@ -69,7 +71,14 @@ export default function AcolhidoForm({
   medicamentosDisponiveis = [],
   motivosAdesao = [],
   motivosDesistencia = [],
+  responsaveisDisponiveis = [],
   modoHistorico = false,
+  acolhidosDisponiveis = [],
+  ocorrenciasDoAcolhido = [],
+  onCriarOcorrencia,
+  onAtualizarOcorrencia,
+  onExcluirOcorrencia,
+  salvandoOcorrencia = false,
   onSalvar,
   onCancelar,
   onVerLista,
@@ -176,6 +185,10 @@ export default function AcolhidoForm({
         motivoDesistenciaId:
           acolhidoEditando.motivoDesistenciaId != null
             ? String(acolhidoEditando.motivoDesistenciaId)
+            : '',
+        responsavelId:
+          acolhidoEditando.responsavelId != null
+            ? String(acolhidoEditando.responsavelId)
             : '',
       });
       const prescricoes = Array.isArray(acolhidoEditando.prescricoes)
@@ -443,6 +456,10 @@ export default function AcolhidoForm({
       novosErros.motivoAdesaoId = 'Selecione o motivo de adesão';
     }
 
+    if (!form.responsavelId) {
+      novosErros.responsavelId = 'Selecione o responsável';
+    }
+
     if (form.alta) {
       if (!form.tipoAlta) {
         novosErros.tipoAlta = 'Selecione o tipo da alta';
@@ -485,6 +502,9 @@ export default function AcolhidoForm({
       endereco: 'Rua das Flores, 123, Centro, São Paulo - SP',
       quarto: '101',
       motivoAdesaoId: motivosAdesao[0]?.id ? String(motivosAdesao[0].id) : '',
+      responsavelId: responsaveisDisponiveis[0]?.id
+        ? String(responsaveisDisponiveis[0].id)
+        : '',
     });
     setMedicamentosSelecionadosIds(
       medicamentosDisponiveisOrdenados.slice(0, 2).map((m) => m.id)
@@ -626,6 +646,7 @@ export default function AcolhidoForm({
         form.alta && form.tipoAlta === 'DESISTENCIA' && form.motivoDesistenciaId
           ? Number(form.motivoDesistenciaId)
           : null,
+      responsavelId: form.responsavelId ? Number(form.responsavelId) : null,
       prescricoes: medicamentosSelecionadosIds.map((medicamentoId) => {
         const dose = doseDoMedicamento(medicamentoId);
         return {
@@ -662,15 +683,23 @@ export default function AcolhidoForm({
   // (pessoas que já passaram pela comunidade normalmente têm uma alta registrada).
   const mostrarAlta = editando || modoHistorico;
 
-  const abas = useMemo(
-    () => [
+  const abas = useMemo(() => {
+    const base = [
       { id: 'gerais', rotulo: 'Informações gerais' },
       { id: 'medicacoes', rotulo: 'Medicações' },
       { id: 'combinados', rotulo: 'Combinados' },
       { id: 'anexos', rotulo: 'Anexos' },
-    ],
-    []
-  );
+    ];
+    // A gestão de ocorrências exige um acolhido já existente (id definido),
+    // por isso a aba só aparece na edição.
+    if (editando) {
+      base.push({
+        id: 'ocorrencias',
+        rotulo: `Ocorrências (${ocorrenciasDoAcolhido.length})`,
+      });
+    }
+    return base;
+  }, [editando, ocorrenciasDoAcolhido.length]);
 
   // Mantém a aba ativa sempre entre as disponíveis para o contexto atual.
   useEffect(() => {
@@ -919,6 +948,31 @@ export default function AcolhidoForm({
           <span className="campo-ajuda">
             Por que o acolhido entrou na comunidade. Gerencie as opções no menu
             &quot;Motivos&quot;.
+          </span>
+        </div>
+
+        <div className="campo campo-largo">
+          <label htmlFor="responsavelId">Responsável *</label>
+          <select
+            id="responsavelId"
+            name="responsavelId"
+            value={form.responsavelId}
+            onChange={handleChange}
+          >
+            <option value="">Selecione...</option>
+            {responsaveisDisponiveis.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.nome}
+                {r.cpf ? ` — ${r.cpf}` : ''}
+              </option>
+            ))}
+          </select>
+          {erros.responsavelId && (
+            <span className="erro">{erros.responsavelId}</span>
+          )}
+          <span className="campo-ajuda">
+            Todo acolhido deve ter um responsável. Cadastre novos responsáveis no
+            menu &quot;Responsáveis&quot;.
           </span>
         </div>
 
@@ -1416,6 +1470,18 @@ export default function AcolhidoForm({
             )}
           </div>
       </div>
+      )}
+
+      {abaAtiva === 'ocorrencias' && editando && (
+        <OcorrenciasDoAcolhido
+          acolhidoId={acolhidoEditando?.id}
+          ocorrencias={ocorrenciasDoAcolhido}
+          acolhidosDisponiveis={acolhidosDisponiveis}
+          onCriar={onCriarOcorrencia}
+          onAtualizar={onAtualizarOcorrencia}
+          onExcluir={onExcluirOcorrencia}
+          salvando={salvandoOcorrencia}
+        />
       )}
 
       <div className="acoes">

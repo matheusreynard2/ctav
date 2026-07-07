@@ -14,6 +14,12 @@ export const maskCelular = (value) => {
   return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`;
 };
 
+export const maskCep = (value) => {
+  const n = (value ?? '').replace(/\D/g, '').slice(0, 8);
+  if (n.length <= 5) return n;
+  return `${n.slice(0, 5)}-${n.slice(5)}`;
+};
+
 export const maskData = (value) => {
   let n = (value ?? '').replace(/\D/g, '');
 

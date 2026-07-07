@@ -46,6 +46,22 @@ const ITENS_MENU = [
       { id: 'cadastro-combinado', label: 'Cadastrar combinado' },
     ],
   },
+  {
+    id: 'grupo-ocorrencias',
+    label: 'Ocorrências',
+    filhos: [
+      { id: 'ocorrencias', label: 'Lista de ocorrências' },
+      { id: 'cadastro-ocorrencia', label: 'Cadastrar ocorrência' },
+    ],
+  },
+  {
+    id: 'grupo-responsaveis',
+    label: 'Responsáveis',
+    filhos: [
+      { id: 'responsaveis', label: 'Lista de responsáveis' },
+      { id: 'cadastro-responsavel', label: 'Cadastrar responsável' },
+    ],
+  },
   { id: 'relatorios', label: 'Relatórios' },
 ];
 
@@ -56,6 +72,7 @@ export default function Header({ pagina, onNavegar, usuario, onLogout }) {
   const [submenuAberto, setSubmenuAberto] = useState(null);
   const menuRef = useRef(null);
   const botaoRef = useRef(null);
+  const menuDesktopRef = useRef(null);
   const fecharSubmenuTimeout = useRef(null);
 
   useEffect(() => {
@@ -94,6 +111,18 @@ export default function Header({ pagina, onNavegar, usuario, onLogout }) {
     };
   }, []);
 
+  // Fecha o submenu do menu horizontal (desktop) ao clicar fora dele.
+  useEffect(() => {
+    if (aberto || !submenuAberto) return undefined;
+    const handleClickFora = (e) => {
+      if (!menuDesktopRef.current?.contains(e.target)) {
+        setSubmenuAberto(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickFora);
+    return () => document.removeEventListener('mousedown', handleClickFora);
+  }, [aberto, submenuAberto]);
+
   const ir = (id) => {
     onNavegar(id);
     setAberto(false);
@@ -125,6 +154,7 @@ export default function Header({ pagina, onNavegar, usuario, onLogout }) {
   };
 
   return (
+    <>
     <header className="topo">
       <div className="container topo-conteudo">
         <div className="topo-titulo">
@@ -235,5 +265,65 @@ export default function Header({ pagina, onNavegar, usuario, onLogout }) {
         )}
       </div>
     </header>
+
+    <nav className="menu-desktop" aria-label="Menu principal" ref={menuDesktopRef}>
+      <div className="container menu-desktop-conteudo">
+        {ITENS_MENU.map((item) =>
+          item.filhos ? (
+            <div
+              key={item.id}
+              className="menu-desktop-grupo"
+              onMouseEnter={() => abrirSubmenu(item.id)}
+              onMouseLeave={agendarFechamentoSubmenu}
+            >
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={submenuAberto === item.id}
+                className={`menu-desktop-item ${itemAtivo(item) ? 'ativo' : ''}`}
+                onClick={() =>
+                  setSubmenuAberto((atual) => (atual === item.id ? null : item.id))
+                }
+              >
+                <span>{item.label}</span>
+                <span className="menu-desktop-seta" aria-hidden="true">▾</span>
+              </button>
+
+              {submenuAberto === item.id && (
+                <div
+                  className="menu-desktop-submenu"
+                  role="menu"
+                  onMouseEnter={() => abrirSubmenu(item.id)}
+                  onMouseLeave={agendarFechamentoSubmenu}
+                >
+                  {item.filhos.map((filho) => (
+                    <button
+                      key={filho.id}
+                      type="button"
+                      role="menuitem"
+                      className={`menu-item ${pagina === filho.id ? 'ativo' : ''}`}
+                      onClick={() => ir(filho.id)}
+                    >
+                      {filho.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              key={item.id}
+              type="button"
+              className={`menu-desktop-item ${itemAtivo(item) ? 'ativo' : ''}`}
+              onClick={() => ir(item.id)}
+              onMouseEnter={() => setSubmenuAberto(null)}
+            >
+              {item.label}
+            </button>
+          )
+        )}
+      </div>
+    </nav>
+    </>
   );
 }

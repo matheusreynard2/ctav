@@ -106,6 +106,13 @@ public class Acolhido {
     @JoinColumn(name = "motivo_desistencia_id")
     private Motivo motivoDesistencia;
 
+    // Responsavel legal do acolhido (todo acolhido sempre tem um responsavel).
+    // A coluna e anulavel no banco para nao quebrar registros legados; a
+    // obrigatoriedade e garantida pela regra de negocio no service.
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "responsavel_id")
+    private Responsavel responsavel;
+
     // Indica que o acolhido foi enviado ao arquivo morto/historico.
     // Quando true, o acolhido some da lista principal mas mantem todos os
     // dados relacionados (prescricoes, administracoes, anexos, combinados).
