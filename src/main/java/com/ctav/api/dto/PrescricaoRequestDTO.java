@@ -33,4 +33,10 @@ public class PrescricaoRequestDTO {
     @Min(value = 0, message = "A dose não pode ser negativa")
     @Builder.Default
     private Integer doseNoite = 0;
+
+    // Comprimidos reservados/alocados deste medicamento para o acolhido. Saem do
+    // estoque livre do medicamento e ficam exclusivos deste acolhido.
+    @Min(value = 0, message = "O estoque reservado não pode ser negativo")
+    @Builder.Default
+    private Integer totalComprimidos = 0;
 }

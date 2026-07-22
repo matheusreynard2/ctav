@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { rotuloTipoCombinado } from '../utils/combinados';
+import { usePaginacao } from '../hooks/usePaginacao';
+import Paginacao from './Paginacao.jsx';
 
 export default function CombinadoList({
   combinados,
@@ -28,6 +30,9 @@ export default function CombinadoList({
       )
     );
   }, [lista, termo]);
+
+  const { paginaAtual, totalPaginas, total, inicio, fim, itensPagina, setPagina } =
+    usePaginacao(filtrados, 10, termo);
 
   const idsFiltrados = filtrados.map((c) => c.id);
   const todosSelecionados =
@@ -133,7 +138,7 @@ export default function CombinadoList({
             </tr>
           </thead>
           <tbody>
-            {filtrados.map((c) => (
+            {itensPagina.map((c) => (
               <tr key={c.id} className={selecionados.has(c.id) ? 'linha-selecionada' : ''}>
                 <td className="col-check">
                   <input
@@ -192,6 +197,15 @@ export default function CombinadoList({
           </tbody>
         </table>
       )}
+
+      <Paginacao
+        paginaAtual={paginaAtual}
+        totalPaginas={totalPaginas}
+        total={total}
+        inicio={inicio}
+        fim={fim}
+        onMudar={setPagina}
+      />
     </div>
   );
 }

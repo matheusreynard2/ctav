@@ -22,6 +22,12 @@ public class PrescricaoResponseDTO {
     private Integer doseManha;
     private Integer doseTarde;
     private Integer doseNoite;
+    // Estoque reservado deste medicamento para o acolhido.
+    private Integer totalComprimidos;
+    // Tamanho da caixa do medicamento (para exibir a equivalencia em caixas).
+    private Integer quantidadePorCaixa;
+    // Estoque livre (nao alocado) do medicamento, disponivel para reservar.
+    private Integer medicamentoEstoqueLivre;
 
     public static PrescricaoResponseDTO fromEntity(Prescricao prescricao) {
         return PrescricaoResponseDTO.builder()
@@ -32,6 +38,9 @@ public class PrescricaoResponseDTO {
                 .doseManha(prescricao.getDoseManha())
                 .doseTarde(prescricao.getDoseTarde())
                 .doseNoite(prescricao.getDoseNoite())
+                .totalComprimidos(prescricao.getTotalComprimidos())
+                .quantidadePorCaixa(prescricao.getMedicamento().getQuantidade_por_caixa())
+                .medicamentoEstoqueLivre(prescricao.getMedicamento().getTotal_comprimidos())
                 .build();
     }
 }

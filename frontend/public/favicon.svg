@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Betesda Care">
+  <defs>
+    <linearGradient id="fav" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="26" fill="#eff6ff" />
+  <g transform="translate(60 60)">
+    <path d="M 0 28 C -44 4 -66 -24 -44 -47 C -27 -60 -10 -47 0 -34 C 10 -47 27 -60 44 -47 C 66 -24 44 4 0 28 Z" fill="url(#fav)" />
+    <rect x="-5" y="-42" width="10" height="30" rx="2" fill="#ffffff" />
+    <rect x="-15" y="-32" width="30" height="10" rx="2" fill="#ffffff" />
+  </g>
+</svg>

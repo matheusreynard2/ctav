@@ -50,4 +50,9 @@ public class ResponsavelRequestDTO {
     private String celular;
 
     private Boolean conveniado;
+
+    // Assinatura do responsavel (imagem PNG em data URL base64). No cadastro e
+    // gravada quando desenhada; na atualizacao, quando null preserva o valor
+    // atual e quando vazia ("") remove a assinatura.
+    private String assinatura;
 }

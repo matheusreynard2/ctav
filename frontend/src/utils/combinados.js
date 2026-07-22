@@ -7,7 +7,7 @@ export const TIPOS_COMBINADO = [
   { valor: 'BANCO', rotulo: 'Banco' },
   { valor: 'DETRAN', rotulo: 'Detran' },
   { valor: TIPO_RESSOCIALIZACAO, rotulo: 'Ressocialização com a família' },
-  { valor: 'OUTRO', rotulo: 'Outro tipo de saída' },
+  { valor: 'OUTRO', rotulo: 'Outro tipo de combinado' },
 ];
 
 export const rotuloTipoCombinado = (tipo) =>

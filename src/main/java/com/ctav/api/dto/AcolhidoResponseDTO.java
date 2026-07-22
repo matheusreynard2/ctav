@@ -49,6 +49,15 @@ public class AcolhidoResponseDTO {
     private LocalDateTime arquivadoEm;
     // URL pre-assinada (temporaria) para exibir a foto; null quando nao ha foto.
     private String fotoUrl;
+    // Assinaturas do termo (imagem PNG em data URL base64); null quando ausentes.
+    // A do acolhido vem da propria entidade; a do responsavel vem do responsavel
+    // vinculado (fonte unica).
+    private String assinaturaAcolhido;
+    private String assinaturaResponsavel;
+    // Opcoes escolhidas nos termos assinados (uso de imagem e entrega de celular).
+    private Boolean autorizaUsoImagem;
+    private Boolean entregaCelular;
+    private Boolean concordaPertences;
     private List<PrescricaoResponseDTO> prescricoes;
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
@@ -101,6 +110,13 @@ public class AcolhidoResponseDTO {
                         : null)
                 .arquivado(acolhido.getArquivado())
                 .arquivadoEm(acolhido.getArquivadoEm())
+                .assinaturaAcolhido(acolhido.getAssinaturaAcolhido())
+                .assinaturaResponsavel(acolhido.getResponsavel() != null
+                        ? acolhido.getResponsavel().getAssinatura()
+                        : null)
+                .autorizaUsoImagem(acolhido.getAutorizaUsoImagem())
+                .entregaCelular(acolhido.getEntregaCelular())
+                .concordaPertences(acolhido.getConcordaPertences())
                 .prescricoes(prescricoes)
                 .criadoEm(acolhido.getCriadoEm())
                 .atualizadoEm(acolhido.getAtualizadoEm())

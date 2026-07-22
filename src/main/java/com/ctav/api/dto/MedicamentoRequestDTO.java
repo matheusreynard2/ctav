@@ -26,11 +26,11 @@ public class MedicamentoRequestDTO {
     @Size(min = 2, max = 255, message = "A descrição deve ter entre 2 e 255 caracteres")
     private String descricao;
 
-    @NotNull(message = "A quantidade de caixas é obrigatória")
-    @Min(value = 0, message = "A quantidade de caixas não pode ser negativa")
-    private Integer quantidade_caixas;
-
     @NotNull(message = "A quantidade por caixa é obrigatória")
-    @Min(value = 0, message = "A quantidade por caixa não pode ser negativa")
+    @Min(value = 1, message = "A quantidade por caixa deve ser ao menos 1")
     private Integer quantidade_por_caixa;
+
+    @NotNull(message = "O total de comprimidos é obrigatório")
+    @Min(value = 0, message = "O total de comprimidos não pode ser negativo")
+    private Integer total_comprimidos;
 }

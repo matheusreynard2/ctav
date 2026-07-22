@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { usePaginacao } from '../hooks/usePaginacao';
+import Paginacao from './Paginacao.jsx';
 
 const formatarData = (data) => {
   if (!data) return '-';
@@ -33,6 +35,9 @@ export default function OcorrenciaList({
       )
     );
   }, [lista, termo]);
+
+  const { paginaAtual, totalPaginas, total, inicio, fim, itensPagina, setPagina } =
+    usePaginacao(filtrados, 10, termo);
 
   const idsFiltrados = filtrados.map((o) => o.id);
   const todosSelecionados =
@@ -138,7 +143,7 @@ export default function OcorrenciaList({
             </tr>
           </thead>
           <tbody>
-            {filtrados.map((o) => (
+            {itensPagina.map((o) => (
               <tr key={o.id} className={selecionados.has(o.id) ? 'linha-selecionada' : ''}>
                 <td className="col-check">
                   <input
@@ -202,6 +207,15 @@ export default function OcorrenciaList({
           </tbody>
         </table>
       )}
+
+      <Paginacao
+        paginaAtual={paginaAtual}
+        totalPaginas={totalPaginas}
+        total={total}
+        inicio={inicio}
+        fim={fim}
+        onMudar={setPagina}
+      />
     </div>
   );
 }

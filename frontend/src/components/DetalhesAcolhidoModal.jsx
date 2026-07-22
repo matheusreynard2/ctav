@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { anexoService } from '../api';
+import { anexoService, pertenceService } from '../api';
 import { rotuloTipoCombinado, TIPO_RESSOCIALIZACAO } from '../utils/combinados';
 
 const formatarData = (data) => {
@@ -77,6 +77,9 @@ export default function DetalhesAcolhidoModal({
   const [thumbs, setThumbs] = useState({});
   const [baixandoId, setBaixandoId] = useState(null);
   const [erroAnexos, setErroAnexos] = useState('');
+  const [pertences, setPertences] = useState([]);
+  const [carregandoPertences, setCarregandoPertences] = useState(false);
+  const [erroPertences, setErroPertences] = useState('');
 
   useEffect(() => {
     if (!acolhido) return;
@@ -134,6 +137,31 @@ export default function DetalhesAcolhidoModal({
     };
   }, [acolhidoId]);
 
+  // Carrega os pertences (com as fotos) do acolhido selecionado.
+  useEffect(() => {
+    if (!acolhidoId) {
+      setPertences([]);
+      return undefined;
+    }
+    let ativo = true;
+    setCarregandoPertences(true);
+    setErroPertences('');
+    pertenceService
+      .listar(acolhidoId)
+      .then((dados) => {
+        if (ativo) setPertences(Array.isArray(dados) ? dados : []);
+      })
+      .catch(() => {
+        if (ativo) setErroPertences('Não foi possível carregar os pertences.');
+      })
+      .finally(() => {
+        if (ativo) setCarregandoPertences(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [acolhidoId]);
+
   if (!acolhido) return null;
 
   const prescricoes = Array.isArray(acolhido.prescricoes)
@@ -165,6 +193,10 @@ export default function DetalhesAcolhidoModal({
     { id: 'medicacoes', rotulo: `Medicações (${prescricoes.length})` },
     { id: 'combinados', rotulo: `Combinados (${listaCombinados.length})` },
     { id: 'ocorrencias', rotulo: `Ocorrências (${listaOcorrencias.length})` },
+    {
+      id: 'pertences',
+      rotulo: `Pertences${carregandoPertences ? '' : ` (${pertences.length})`}`,
+    },
     {
       id: 'anexos',
       rotulo: `Anexos${carregandoAnexos ? '' : ` (${anexos.length})`}`,
@@ -292,6 +324,44 @@ export default function DetalhesAcolhidoModal({
                   <Campo label="Celular" valor={acolhido.telefone} />
                   <Campo label="Endereço" valor={acolhido.endereco} largo />
                 </div>
+              </section>
+
+              <section className="detalhes-secao">
+                <h4 className="detalhes-secao-titulo">
+                  Assinaturas do termo de concordância
+                </h4>
+                {acolhido.assinaturaAcolhido || acolhido.assinaturaResponsavel ? (
+                  <div className="assinaturas-visualizacao">
+                    <div className="assinatura-visualizacao-item">
+                      <span className="detalhes-label">Acolhido</span>
+                      {acolhido.assinaturaAcolhido ? (
+                        <img
+                          className="assinatura-imagem"
+                          src={acolhido.assinaturaAcolhido}
+                          alt="Assinatura do acolhido"
+                        />
+                      ) : (
+                        <span className="detalhes-valor">Não assinado</span>
+                      )}
+                    </div>
+                    <div className="assinatura-visualizacao-item">
+                      <span className="detalhes-label">Responsável</span>
+                      {acolhido.assinaturaResponsavel ? (
+                        <img
+                          className="assinatura-imagem"
+                          src={acolhido.assinaturaResponsavel}
+                          alt="Assinatura do responsável"
+                        />
+                      ) : (
+                        <span className="detalhes-valor">Não assinado</span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="detalhes-vazio">
+                    Nenhuma assinatura do termo registrada.
+                  </p>
+                )}
               </section>
 
               <section className="detalhes-secao detalhes-auditoria">
@@ -425,6 +495,50 @@ export default function DetalhesAcolhidoModal({
                 </ul>
               ) : (
                 <p className="detalhes-vazio">Nenhuma ocorrência registrada.</p>
+              )}
+            </section>
+          )}
+
+          {aba === 'pertences' && (
+            <section className="detalhes-secao">
+              <h4 className="detalhes-secao-titulo">
+                Registro de pertences em posse do acolhido
+              </h4>
+              {erroPertences && <p className="detalhes-vazio">{erroPertences}</p>}
+              {carregandoPertences ? (
+                <p className="detalhes-vazio">Carregando pertences...</p>
+              ) : pertences.length === 0 ? (
+                <p className="detalhes-vazio">Nenhum pertence registrado.</p>
+              ) : (
+                <ul className="detalhes-pertences">
+                  {pertences.map((p) => {
+                    const fotos = Array.isArray(p.fotos) ? p.fotos : [];
+                    return (
+                      <li key={p.id} className="detalhes-pertence">
+                        <div className="detalhes-pertence-cabecalho">
+                          <span className="detalhes-pertence-qtd">{p.quantidade}x</span>
+                          <span className="detalhes-pertence-item">{p.item}</span>
+                        </div>
+                        {fotos.length > 0 && (
+                          <div className="detalhes-pertence-fotos">
+                            {fotos.map((f) => (
+                              <a
+                                key={f.id}
+                                href={f.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="detalhes-pertence-foto"
+                                title={f.nomeArquivo || 'Foto do pertence'}
+                              >
+                                <img src={f.url} alt={f.nomeArquivo || 'Foto do pertence'} />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </section>
           )}

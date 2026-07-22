@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { administracaoService } from '../api';
 import { TIPOS_ALTA, rotuloTipoAlta } from '../utils/altas';
 import {
+  calcularMetricasConsultas,
+  formatarDataHoraConsulta,
+  rotuloStatusConsulta,
+} from '../utils/consultas';
+import { exportarConsultasPdf } from '../utils/exportarConsultasPdf';
+import {
   MESES_CONTROLE,
   diasDoMes,
   mapaRegistrosAdministracao,
@@ -15,6 +21,7 @@ import {
   exportTodosRelatoriosPdf,
 } from '../utils/exportarRelatoriosPdf';
 import GradeControleAdministracao from './GradeControleAdministracao';
+import RelatorioConsultas from './RelatorioConsultas';
 import {
   GraficoBarras,
   GraficoDistribuicao,
@@ -101,6 +108,37 @@ const FAIXAS_PERMANENCIA = [
   { rotulo: 'Mais de 1 ano', min: 366, max: Infinity },
 ];
 
+// Faixas etárias (em anos completos) usadas nos gráficos demográficos.
+const FAIXAS_ETARIAS = [
+  { rotulo: '0 a 17', min: 0, max: 17 },
+  { rotulo: '18 a 24', min: 18, max: 24 },
+  { rotulo: '25 a 34', min: 25, max: 34 },
+  { rotulo: '35 a 44', min: 35, max: 44 },
+  { rotulo: '45 a 59', min: 45, max: 59 },
+  { rotulo: '60 ou mais', min: 60, max: Infinity },
+];
+
+const rotuloSexo = (s) =>
+  s === 'MASCULINO'
+    ? 'Masculino'
+    : s === 'FEMININO'
+    ? 'Feminino'
+    : s === 'OUTRO'
+    ? 'Outro'
+    : 'Não informado';
+
+// Idade em anos completos a partir de uma data ISO (yyyy-mm-dd).
+const calcularIdade = (iso) => {
+  const p = iso?.slice(0, 10).split('-').map(Number);
+  if (!p || p.length !== 3 || p.some(Number.isNaN)) return null;
+  const [ano, mes, dia] = p;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - ano;
+  const diffMes = hoje.getMonth() + 1 - mes;
+  if (diffMes < 0 || (diffMes === 0 && hoje.getDate() < dia)) idade -= 1;
+  return idade >= 0 ? idade : null;
+};
+
 // Converte a média (em dias) para um texto amigável em meses e dias.
 const textoMediaDias = (dias) => {
   if (dias == null || dias < 0) return '-';
@@ -116,6 +154,8 @@ const textoMediaDias = (dias) => {
 
 export default function Relatorios({
   acolhidos = [],
+  consultas = [],
+  podeConsultas = false,
   carregando = false,
   onErro,
 }) {
@@ -133,8 +173,16 @@ export default function Relatorios({
         if (alta) anos.add(alta.ano);
       }
     });
+    // Inclui os anos com consultas para que o seletor geral também sirva ao
+    // relatório de consultas.
+    if (podeConsultas) {
+      (Array.isArray(consultas) ? consultas : []).forEach((c) => {
+        const d = c?.dataHora ? new Date(c.dataHora) : null;
+        if (d && !Number.isNaN(d.getTime())) anos.add(d.getFullYear());
+      });
+    }
     return [...anos].sort((x, y) => y - x);
-  }, [acolhidos]);
+  }, [acolhidos, consultas, podeConsultas]);
 
   const acolhidosOrdenados = useMemo(
     () => [...acolhidos].sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '')),
@@ -258,6 +306,90 @@ export default function Relatorios({
     };
   }, [acolhidosComAlta]);
 
+  // Conjunto ampliado de gráficos: demografia dos registrados no ano e um
+  // panorama geral (situação, convênio, ocupação e medicamentos) de toda a base.
+  const graficos = useMemo(() => {
+    const ano = Number(anoSelecionado);
+    if (!ano) return null;
+
+    const registradosAno = acolhidos.filter((a) => {
+      const ac = partesData(a.dataAcolhimentoCtav);
+      return ac && ac.ano === ano;
+    });
+
+    const contarMapa = (lista, fn) => {
+      const mapa = new Map();
+      lista.forEach((a) => {
+        const chave = fn(a);
+        if (chave == null) return;
+        mapa.set(chave, (mapa.get(chave) ?? 0) + 1);
+      });
+      return mapa;
+    };
+
+    const distribuirFaixas = (lista, faixas, valorFn) =>
+      faixas.map((f) => ({
+        rotulo: f.rotulo,
+        valor: lista.filter((a) => {
+          const v = valorFn(a);
+          return v != null && v >= f.min && v <= f.max;
+        }).length,
+      }));
+
+    const sexoAno = mapaParaDistribuicao(
+      contarMapa(registradosAno, (a) => rotuloSexo(a.sexo))
+    );
+    const faixaEtariaAno = distribuirFaixas(
+      registradosAno,
+      FAIXAS_ETARIAS,
+      (a) => calcularIdade(a.dataNascimento)
+    );
+
+    // Panorama geral considera todos os acolhidos (ativos + histórico).
+    const ativos = acolhidos.filter((a) => !a.arquivado);
+    const situacao = [
+      { rotulo: 'Ativos', valor: ativos.length },
+      { rotulo: 'No histórico', valor: acolhidos.length - ativos.length },
+    ];
+
+    const conveniados = acolhidos.filter((a) => a.responsavelConveniado).length;
+    const vinculo = [
+      { rotulo: 'Com responsável conveniado', valor: conveniados },
+      {
+        rotulo: 'Sem convênio / sem responsável',
+        valor: acolhidos.length - conveniados,
+      },
+    ];
+
+    const ocupacaoQuarto = mapaParaDistribuicao(
+      contarMapa(
+        ativos.filter(
+          (a) => a.quarto != null && String(a.quarto).trim() !== ''
+        ),
+        (a) => `Quarto ${String(a.quarto).trim()}`
+      )
+    );
+
+    const medMapa = new Map();
+    acolhidos.forEach((a) => {
+      (a.prescricoes ?? []).forEach((p) => {
+        const nome = p.medicamentoNome?.trim();
+        if (!nome) return;
+        medMapa.set(nome, (medMapa.get(nome) ?? 0) + 1);
+      });
+    });
+    const medicamentos = mapaParaDistribuicao(medMapa).slice(0, 10);
+
+    return {
+      sexoAno,
+      faixaEtariaAno,
+      situacao,
+      vinculo,
+      ocupacaoQuarto,
+      medicamentos,
+    };
+  }, [acolhidos, anoSelecionado]);
+
   const acolhidoAdmin = useMemo(
     () =>
       acolhidosOrdenados.find((a) => String(a.id) === String(acolhidoAdminId)) ??
@@ -329,8 +461,42 @@ export default function Relatorios({
       }
     : null;
 
+  // Consultas podem ser exportadas mesmo sem ano selecionado (todos os anos).
+  const podeExportarConsultas =
+    podeConsultas && Array.isArray(consultas) && consultas.length > 0;
+
+  const exportarConsultasComFiltro = () => {
+    const metricas = calcularMetricasConsultas(consultas, anoSelecionado);
+    const usarPorMes = !!Number(anoSelecionado);
+    return exportarConsultasPdf({
+      subtitulo: anoSelecionado ? String(anoSelecionado) : 'Todos os anos',
+      geradoEm: new Date().toLocaleString('pt-BR'),
+      resumo: {
+        total: metricas.total,
+        agendadas: metricas.agendadas,
+        realizadas: metricas.realizadas,
+        canceladas: metricas.canceladas,
+      },
+      barras: usarPorMes
+        ? { titulo: `Consultas por mês (${anoSelecionado})`, dados: metricas.porMes }
+        : { titulo: 'Consultas por ano', dados: metricas.porAno },
+      distribuicoes: [
+        { titulo: 'Por situação', itens: metricas.situacao },
+        { titulo: 'Por profissional', itens: metricas.profissionais },
+        { titulo: 'Por acolhido', itens: metricas.acolhidos },
+      ],
+      tabela: metricas.consultasOrdenadas.map((c) => ({
+        acolhido: c.acolhidoNome ?? '-',
+        dataHora: formatarDataHoraConsulta(c.dataHora),
+        profissional: c.profissional || '-',
+        situacao: rotuloStatusConsulta(c.status),
+      })),
+      nomeArquivo: `ctav-relatorio-consultas-${anoSelecionado || 'geral'}.pdf`,
+    });
+  };
+
   const exportarComFeedback = async (acao) => {
-    if (!relatorio || exportando) return;
+    if (exportando) return;
     setExportando(true);
     try {
       await acao();
@@ -343,6 +509,8 @@ export default function Relatorios({
 
   const exportarVisaoAtual = () =>
     exportarComFeedback(() => {
+      if (visao === 'consultas') return exportarConsultasComFiltro();
+      if (!relatorio) return Promise.resolve();
       if (visao === 'mensal') return exportQuadroMensalPdf(relatorio);
       if (visao === 'altas') return exportAltasPdf(acolhidosComAlta, relatorio.ano);
       if (dadosControlePdf) return exportControleAdministracaoPdf(dadosControlePdf);
@@ -350,13 +518,18 @@ export default function Relatorios({
     });
 
   const exportarTodos = () =>
-    exportarComFeedback(() =>
-      exportTodosRelatoriosPdf({
-        relatorio,
-        acolhidosComAlta,
-        controle: dadosControlePdf,
-      })
-    );
+    exportarComFeedback(async () => {
+      if (relatorio) {
+        await exportTodosRelatoriosPdf({
+          relatorio,
+          acolhidosComAlta,
+          controle: dadosControlePdf,
+        });
+      }
+      if (podeExportarConsultas) {
+        await exportarConsultasComFiltro();
+      }
+    });
 
   return (
     <section className="card relatorios">
@@ -369,13 +542,18 @@ export default function Relatorios({
             de administração de medicamentos.
           </p>
         </div>
-        {anoSelecionado && relatorio && (
+        {((anoSelecionado && relatorio) ||
+          (visao === 'consultas' && podeExportarConsultas)) && (
           <div className="relatorios-acoes">
             <button
               type="button"
               className="btn btn-secundario btn-pequeno"
               onClick={exportarVisaoAtual}
-              disabled={exportando || (visao === 'administracao' && !dadosControlePdf)}
+              disabled={
+                exportando ||
+                (visao === 'administracao' && !dadosControlePdf) ||
+                (visao === 'consultas' && !podeExportarConsultas)
+              }
             >
               {exportando ? 'Gerando PDF...' : 'Exportar visão (PDF)'}
             </button>
@@ -393,7 +571,7 @@ export default function Relatorios({
 
       {carregando ? (
         <p className="vazio">Carregando dados...</p>
-      ) : anosDisponiveis.length === 0 ? (
+      ) : anosDisponiveis.length === 0 && !(podeConsultas && consultas.length > 0) ? (
         <p className="vazio">
           Ainda não há dados suficientes para gerar relatórios.
         </p>
@@ -497,10 +675,26 @@ export default function Relatorios({
               >
                 Controle de administração
               </button>
+              {podeConsultas && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={visao === 'consultas'}
+                  className={`relatorios-visao-btn ${visao === 'consultas' ? 'ativo' : ''}`}
+                  onClick={() => setVisao('consultas')}
+                >
+                  Consultas
+                </button>
+              )}
             </div>
           </div>
 
-          {!anoSelecionado ? (
+          {visao === 'consultas' && podeConsultas ? (
+            <RelatorioConsultas
+              consultas={consultas}
+              anoSelecionado={anoSelecionado}
+            />
+          ) : !anoSelecionado ? (
             <p className="vazio">
               Escolha um ano no seletor acima para abrir o quadro.
             </p>
@@ -633,7 +827,45 @@ export default function Relatorios({
                 </div>
               </div>
 
+              <h4 className="relatorio-graficos-secao">
+                Panorama de {relatorio.ano}
+              </h4>
               <div className="relatorio-graficos">
+                <GraficoBarras
+                  titulo={`Acolhidos registrados por mês (${relatorio.ano})`}
+                  dados={relatorio.registrados.map((valor, i) => ({
+                    rotulo: MESES[i],
+                    valor,
+                  }))}
+                  cor="#2563eb"
+                />
+                <GraficoBarras
+                  titulo={`Altas por mês (${relatorio.ano})`}
+                  dados={relatorio.totalAltas.map((valor, i) => ({
+                    rotulo: MESES[i],
+                    valor,
+                  }))}
+                  cor="#f59e0b"
+                />
+                <GraficoDistribuicao
+                  titulo="Altas por tipo"
+                  itens={relatorio.linhasAlta.map((l, i) => ({
+                    rotulo: l.rotulo,
+                    valor: l.total,
+                    cor: PALETA_GRAFICOS[i % PALETA_GRAFICOS.length],
+                  }))}
+                  vazioTexto="Nenhuma alta registrada neste ano."
+                />
+                <GraficoDistribuicao
+                  titulo="Acolhidos por sexo (registrados no ano)"
+                  itens={graficos?.sexoAno ?? []}
+                  vazioTexto="Nenhum acolhido registrado neste ano."
+                />
+                <GraficoDistribuicao
+                  titulo="Acolhidos por faixa etária (registrados no ano)"
+                  itens={graficos?.faixaEtariaAno ?? []}
+                  vazioTexto="Sem datas de nascimento informadas neste ano."
+                />
                 <GraficoDistribuicao
                   titulo={`Média de permanência dos acolhidos${
                     mediaPermanencia.quantidade
@@ -655,12 +887,39 @@ export default function Relatorios({
                 />
               </div>
 
+              <h4 className="relatorio-graficos-secao">
+                Panorama geral (todos os acolhidos)
+              </h4>
+              <div className="relatorio-graficos">
+                <GraficoDistribuicao
+                  titulo="Situação atual"
+                  itens={graficos?.situacao ?? []}
+                  vazioTexto="Nenhum acolhido cadastrado."
+                />
+                <GraficoDistribuicao
+                  titulo="Vínculo com convênio"
+                  itens={graficos?.vinculo ?? []}
+                  vazioTexto="Nenhum acolhido cadastrado."
+                />
+                <GraficoDistribuicao
+                  titulo="Ocupação por quarto (acolhidos ativos)"
+                  itens={graficos?.ocupacaoQuarto ?? []}
+                  vazioTexto="Nenhum acolhido ativo com quarto informado."
+                />
+                <GraficoDistribuicao
+                  titulo="Medicamentos mais prescritos (top 10)"
+                  itens={graficos?.medicamentos ?? []}
+                  vazioTexto="Nenhum medicamento prescrito."
+                />
+              </div>
+
               <p className="relatorios-legenda">
-                A média de permanência considera somente as altas do ano que têm
-                data de entrada (acolhimento) e data de saída (alta); cada faixa
-                mostra a quantidade de acolhidos e o percentual sobre esse total.
-                Os motivos de adesão consideram os acolhidos registrados no ano e
-                os de desistência consideram as altas por desistência no ano.
+                O <strong>Panorama de {relatorio.ano}</strong> considera os
+                acolhidos registrados no ano (por data de acolhimento) e as altas
+                do ano; a média de permanência usa apenas as altas com data de
+                entrada e saída. O <strong>Panorama geral</strong> considera toda
+                a base (ativos e histórico), com a ocupação por quarto restrita
+                aos acolhidos ativos.
               </p>
             </div>
           ) : visao === 'altas' ? (

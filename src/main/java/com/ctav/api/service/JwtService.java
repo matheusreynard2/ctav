@@ -31,13 +31,16 @@ public class JwtService {
         this.verifier = JWT.require(algorithm).withIssuer(ISSUER).build();
     }
 
-    public String gerarToken(Long usuarioId, String username, String nome) {
+    public String gerarToken(Long usuarioId, String username, String nome,
+                             Integer permissaoId, Long contaId) {
         Instant agora = Instant.now();
         return JWT.create()
                 .withIssuer(ISSUER)
                 .withSubject(username)
                 .withClaim("uid", usuarioId)
                 .withClaim("nome", nome)
+                .withClaim("perm", permissaoId)
+                .withClaim("cid", contaId)
                 .withIssuedAt(agora)
                 .withExpiresAt(agora.plus(expirationHours, ChronoUnit.HOURS))
                 .sign(algorithm);

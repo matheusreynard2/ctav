@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isoParaData } from '../utils/masks';
+import { usePaginacao } from '../hooks/usePaginacao';
+import Paginacao from './Paginacao.jsx';
 
 export default function AcolhidoList({
   acolhidos,
@@ -32,6 +34,9 @@ export default function AcolhidoList({
       )
     );
   }, [lista, termo]);
+
+  const { paginaAtual, totalPaginas, total, inicio, fim, itensPagina, setPagina } =
+    usePaginacao(filtrados, 10, termo);
 
   const idsFiltrados = filtrados.map((p) => p.id);
   const todosSelecionados =
@@ -151,7 +156,7 @@ export default function AcolhidoList({
             </tr>
           </thead>
           <tbody>
-            {filtrados.map((p) => (
+            {itensPagina.map((p) => (
               <tr key={p.id} className={selecionados.has(p.id) ? 'linha-selecionada' : ''}>
                 <td className="col-check">
                   <input
@@ -273,6 +278,15 @@ export default function AcolhidoList({
           </tbody>
         </table>
       )}
+
+      <Paginacao
+        paginaAtual={paginaAtual}
+        totalPaginas={totalPaginas}
+        total={total}
+        inicio={inicio}
+        fim={fim}
+        onMudar={setPagina}
+      />
     </div>
   );
 }

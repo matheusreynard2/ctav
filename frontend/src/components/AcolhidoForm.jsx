@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AssinaturaPad from './AssinaturaPad.jsx';
 import InputArquivoCustomizado from './InputArquivoCustomizado.jsx';
 import OcorrenciasDoAcolhido from './OcorrenciasDoAcolhido.jsx';
+import PertencesTab from './PertencesTab.jsx';
+import TermoConcordanciaModal from './TermoConcordanciaModal.jsx';
+import NovoMedicamentoModal from './NovoMedicamentoModal.jsx';
 import { TIPOS_ALTA } from '../utils/altas';
 import { TIPOS_COMBINADO, TIPO_RESSOCIALIZACAO } from '../utils/combinados';
 import {
@@ -82,6 +86,13 @@ export default function AcolhidoForm({
   onSalvar,
   onCancelar,
   onVerLista,
+  onNavegar,
+  onCadastrarResponsavel,
+  onCriarMedicamento,
+  rascunhoInicial = null,
+  onErro,
+  onMensagem,
+  onPertencesAlterados,
   salvando,
 }) {
   const editando = Boolean(acolhidoEditando);
@@ -94,9 +105,21 @@ export default function AcolhidoForm({
   const [form, setForm] = useState(FORM_INICIAL);
   const [medicamentosSelecionadosIds, setMedicamentosSelecionadosIds] = useState([]);
   const [dosesPorMedicamento, setDosesPorMedicamento] = useState({});
+  // Comprimidos reservados (estoque exclusivo) de cada medicamento para o acolhido.
+  const [alocacaoPorMedicamento, setAlocacaoPorMedicamento] = useState({});
   const [destaqueDisponivel, setDestaqueDisponivel] = useState(null);
   const [destaqueSelecionado, setDestaqueSelecionado] = useState(null);
+  const [mostrarNovoMedicamento, setMostrarNovoMedicamento] = useState(false);
   const [erros, setErros] = useState({});
+
+  // Controle do modal do termo de concordância exibido antes de cadastrar.
+  const [mostrarTermo, setMostrarTermo] = useState(false);
+
+  // Assinatura do acolhido na edição (data URL). Editada na aba "Assinatura" e
+  // salva junto com o "Atualizar". Mantida em estado para não se perder ao
+  // alternar entre as abas (que desmontam o canvas).
+  const [assinaturaAcolhidoEdit, setAssinaturaAcolhidoEdit] = useState(null);
+  const canvasAssinaturaEditRef = useRef(null);
 
   // Combinados a serem criados junto ao acolhido (somente no cadastro no histórico).
   const [combinadosPendentes, setCombinadosPendentes] = useState([]);
@@ -106,6 +129,9 @@ export default function AcolhidoForm({
   const [combinadoDataVolta, setCombinadoDataVolta] = useState('');
   const [combinadoData, setCombinadoData] = useState('');
   const [anexosPendentes, setAnexosPendentes] = useState([]);
+  // Pertences a serem criados junto ao acolhido (somente no cadastro novo).
+  const [pertencesPendentes, setPertencesPendentes] = useState([]);
+  const pertencesPendentesRef = useRef([]);
   const [anexoTipo, setAnexoTipo] = useState('DOCUMENTO');
   const [anexoNome, setAnexoNome] = useState('');
   const [anexoArquivo, setAnexoArquivo] = useState(null);
@@ -121,6 +147,27 @@ export default function AcolhidoForm({
   useEffect(() => {
     anexosPendentesRef.current = anexosPendentes;
   }, [anexosPendentes]);
+
+  useEffect(() => {
+    pertencesPendentesRef.current = pertencesPendentes;
+  }, [pertencesPendentes]);
+
+  // Revoga as URLs de pré-visualização das fotos de pertences ao desmontar.
+  useEffect(
+    () => () => {
+      pertencesPendentesRef.current.forEach((p) =>
+        (p.fotos || []).forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl))
+      );
+    },
+    []
+  );
+
+  const limparPertencesPendentes = () => {
+    pertencesPendentesRef.current.forEach((p) =>
+      (p.fotos || []).forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl))
+    );
+    setPertencesPendentes([]);
+  };
 
   useEffect(() => {
     fotoPreviewRef.current = fotoPreview;
@@ -198,19 +245,33 @@ export default function AcolhidoForm({
       // Pré-carrega as doses atuais para que a aba Medicações reflita a
       // prescrição existente (e não zere as doses ao salvar).
       const doses = {};
+      const alocacoes = {};
       prescricoes.forEach((p) => {
         doses[p.medicamentoId] = {
           manha: p.doseManha ?? 0,
           tarde: p.doseTarde ?? 0,
           noite: p.doseNoite ?? 0,
         };
+        alocacoes[p.medicamentoId] = p.totalComprimidos ?? 0;
       });
       setDosesPorMedicamento(doses);
+      setAlocacaoPorMedicamento(alocacoes);
+    } else if (rascunhoInicial) {
+      // Retorno do cadastro de responsável: restaura o que já havia sido
+      // preenchido no formulário (inclusive o responsável recém-criado).
+      const base = modoHistorico ? { ...FORM_INICIAL, alta: true } : FORM_INICIAL;
+      setForm({ ...base, ...rascunhoInicial.form });
+      setMedicamentosSelecionadosIds(
+        rascunhoInicial.medicamentosSelecionadosIds ?? []
+      );
+      setDosesPorMedicamento(rascunhoInicial.dosesPorMedicamento ?? {});
+      setAlocacaoPorMedicamento(rascunhoInicial.alocacaoPorMedicamento ?? {});
     } else {
       // No cadastro direto no histórico, a alta já entra marcada.
       setForm(modoHistorico ? { ...FORM_INICIAL, alta: true } : FORM_INICIAL);
       setMedicamentosSelecionadosIds([]);
       setDosesPorMedicamento({});
+      setAlocacaoPorMedicamento({});
     }
     setCombinadosPendentes([]);
     setCombinadoTipo('');
@@ -220,9 +281,11 @@ export default function AcolhidoForm({
     setCombinadoData('');
     setDestaqueDisponivel(null);
     setDestaqueSelecionado(null);
+    setAssinaturaAcolhidoEdit(acolhidoEditando?.assinaturaAcolhido ?? null);
     setErros({});
     setAbaAtiva('gerais');
     limparAnexosPendentes();
+    limparPertencesPendentes();
     limparFoto();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acolhidoEditando]);
@@ -246,6 +309,22 @@ export default function AcolhidoForm({
       .map((id) => mapa.get(id))
       .filter(Boolean);
   }, [medicamentosDisponiveisOrdenados, medicamentosSelecionadosIds]);
+
+  // Reserva já persistida deste acolhido por medicamento (estado do backend). O
+  // "estoque livre" exibido pelo medicamento já desconta essa reserva; por isso
+  // ela é somada de volta ao calcular o estoque livre em tempo real na edição.
+  const reservaBasePorMedicamento = useMemo(() => {
+    const mapa = {};
+    const prescricoes = Array.isArray(acolhidoEditando?.prescricoes)
+      ? acolhidoEditando.prescricoes
+      : [];
+    prescricoes.forEach((p) => {
+      if (p?.medicamentoId != null) {
+        mapa[p.medicamentoId] = Number(p.totalComprimidos) || 0;
+      }
+    });
+    return mapa;
+  }, [acolhidoEditando]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -312,10 +391,26 @@ export default function AcolhidoForm({
     setDestaqueDisponivel(null);
   };
 
+  // Cadastra um medicamento novo e o inclui automaticamente na prescrição.
+  const handleMedicamentoCriado = async (payload) => {
+    if (!onCriarMedicamento) return;
+    const novo = await onCriarMedicamento(payload);
+    if (novo?.id != null) {
+      setMedicamentosSelecionadosIds((atual) =>
+        atual.includes(novo.id) ? atual : [...atual, novo.id]
+      );
+    }
+  };
+
   const removerMedicamento = (id) => {
     if (id == null) return;
     setMedicamentosSelecionadosIds((atual) => atual.filter((x) => x !== id));
     setDosesPorMedicamento((atual) => {
+      const copia = { ...atual };
+      delete copia[id];
+      return copia;
+    });
+    setAlocacaoPorMedicamento((atual) => {
       const copia = { ...atual };
       delete copia[id];
       return copia;
@@ -333,6 +428,7 @@ export default function AcolhidoForm({
   const removerTodosMedicamentos = () => {
     setMedicamentosSelecionadosIds([]);
     setDosesPorMedicamento({});
+    setAlocacaoPorMedicamento({});
     setDestaqueSelecionado(null);
   };
 
@@ -345,6 +441,13 @@ export default function AcolhidoForm({
       ...atual,
       [id]: { ...doseDoMedicamento(id), [periodo]: numero },
     }));
+  };
+
+  const alocacaoDoMedicamento = (id) => Number(alocacaoPorMedicamento[id]) || 0;
+
+  const atualizarAlocacao = (id, valor) => {
+    const numero = Math.max(0, parseInt(valor, 10) || 0);
+    setAlocacaoPorMedicamento((atual) => ({ ...atual, [id]: numero }));
   };
 
   const ehRessocializacaoCombinado = combinadoTipo === TIPO_RESSOCIALIZACAO;
@@ -416,11 +519,36 @@ export default function AcolhidoForm({
 
     if (!form.nome.trim()) novosErros.nome = 'Informe o nome';
 
+    // Verificações de duplicidade (mesmas do backend), feitas ANTES de assinar
+    // os termos. Ignora o próprio registro quando está editando.
+    const idAtual = acolhidoEditando?.id ?? null;
+
     const cpfDigitos = form.cpf.replace(/\D/g, '');
     if (!cpfDigitos) {
       novosErros.cpf = 'Informe o CPF';
     } else if (cpfDigitos.length !== 11) {
       novosErros.cpf = 'CPF deve ter 11 dígitos';
+    } else {
+      const cpfExiste = acolhidosDisponiveis.some(
+        (a) =>
+          a.id !== idAtual &&
+          (a.cpf || '').replace(/\D/g, '') === cpfDigitos
+      );
+      if (cpfExiste) {
+        novosErros.cpf = 'Já existe um acolhido cadastrado com este CPF';
+      }
+    }
+
+    const emailNormalizado = form.email.trim().toLowerCase();
+    if (emailNormalizado) {
+      const emailExiste = acolhidosDisponiveis.some(
+        (a) =>
+          a.id !== idAtual &&
+          (a.email || '').trim().toLowerCase() === emailNormalizado
+      );
+      if (emailExiste) {
+        novosErros.email = 'Já existe um acolhido cadastrado com este email';
+      }
     }
 
     if (!form.dataNascimento.trim()) {
@@ -485,8 +613,30 @@ export default function AcolhidoForm({
       }
     }
 
+    // Reserva de comprimidos: não pode exceder o estoque disponível de cada
+    // medicamento (estoque livre + o que já está reservado para este acolhido).
+    const mapaMeds = new Map(
+      medicamentosDisponiveisOrdenados.map((m) => [m.id, m])
+    );
+    const reservasExcedidas = [];
+    medicamentosSelecionadosIds.forEach((id) => {
+      const m = mapaMeds.get(id);
+      if (!m) return;
+      const livreBackend = Number(m.total_comprimidos) || 0;
+      const base = Number(reservaBasePorMedicamento[id]) || 0;
+      const reservado = alocacaoDoMedicamento(id);
+      if (reservado > livreBackend + base) {
+        reservasExcedidas.push(`${m.nome} (disponível: ${livreBackend + base})`);
+      }
+    });
+    if (reservasExcedidas.length > 0) {
+      novosErros.reservas =
+        'A reserva de comprimidos excede o estoque disponível para: ' +
+        `${reservasExcedidas.join('; ')}. Ajuste a quantidade reservada.`;
+    }
+
     setErros(novosErros);
-    return Object.keys(novosErros).length === 0;
+    return novosErros;
   };
 
   const preencherCadastroTeste = () => {
@@ -620,14 +770,7 @@ export default function AcolhidoForm({
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validar()) {
-      // Os campos validados ficam na aba "Informações gerais".
-      setAbaAtiva('gerais');
-      return;
-    }
-
+  const finalizarSalvar = async (anexosExtra = [], assinaturas = null, opcoes = null) => {
     const payload = {
       nome: form.nome.trim(),
       cpf: form.cpf,
@@ -654,6 +797,7 @@ export default function AcolhidoForm({
           doseManha: permitirDosesECombinados ? dose.manha : 0,
           doseTarde: permitirDosesECombinados ? dose.tarde : 0,
           doseNoite: permitirDosesECombinados ? dose.noite : 0,
+          totalComprimidos: alocacaoDoMedicamento(medicamentoId),
         };
       }),
     };
@@ -664,19 +808,107 @@ export default function AcolhidoForm({
       payload.arquivado = true;
     }
 
+    // Assinaturas do termo: no cadastro vêm do termo (acolhido + responsável).
+    // Na edição, envia a assinatura do acolhido ajustada na aba "Assinatura"
+    // ("" limpa a assinatura; a do responsável é gerenciada na tela dele).
+    if (assinaturas) {
+      payload.assinaturaAcolhido = assinaturas.assinaturaAcolhido ?? null;
+      payload.assinaturaResponsavel = assinaturas.assinaturaResponsavel ?? null;
+    } else if (editando) {
+      payload.assinaturaAcolhido = assinaturaAcolhidoEdit ?? '';
+    }
+
+    // Opções escolhidas nos termos (uso de imagem e entrega de celular),
+    // coletadas no cadastro junto com as assinaturas.
+    if (opcoes) {
+      payload.autorizaUsoImagem = opcoes.autorizaUsoImagem ?? null;
+      payload.entregaCelular = opcoes.entregaCelular ?? null;
+      payload.concordaPertences = opcoes.concordaPertences ?? null;
+    }
+
     const foto = { file: fotoArquivo, remover: fotoRemovida };
     const combinados = permitirDosesECombinados ? combinadosPendentes : [];
-    const salvo = await onSalvar(payload, anexosPendentes, foto, combinados);
+    const anexos = [...anexosPendentes, ...anexosExtra];
+    // Na edição os pertences são gerenciados ao vivo (na própria aba), então só
+    // enviamos pertences pendentes no cadastro novo.
+    const pertences = editando ? [] : pertencesPendentes;
+    const salvo = await onSalvar(payload, anexos, foto, combinados, pertences);
 
     // ao cadastrar com sucesso, limpa o formulário, anexos pendentes e foto
     if (salvo && !editando) {
       limparAnexosPendentes();
+      limparPertencesPendentes();
       limparFoto();
       setForm(modoHistorico ? { ...FORM_INICIAL, alta: true } : FORM_INICIAL);
       setMedicamentosSelecionadosIds([]);
       setDosesPorMedicamento({});
+      setAlocacaoPorMedicamento({});
       setCombinadosPendentes([]);
     }
+    return salvo;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const errosValidacao = validar();
+    if (Object.keys(errosValidacao).length > 0) {
+      // A maioria dos campos validados fica na aba "Informações gerais"; a
+      // reserva de comprimidos fica na aba "Medicações".
+      const camposGerais = Object.keys(errosValidacao).filter(
+        (c) => c !== 'reservas'
+      );
+      if (camposGerais.length > 0) {
+        setAbaAtiva('gerais');
+      } else if (errosValidacao.reservas) {
+        setAbaAtiva('medicacoes');
+      }
+      if (errosValidacao.reservas) onErro?.(errosValidacao.reservas);
+      return;
+    }
+
+    // Em novos cadastros, o termo de concordância é apresentado antes de salvar.
+    // Na edição, o salvamento é direto (a assinatura é ajustada na aba
+    // "Assinatura" e enviada junto com o "Atualizar").
+    if (!editando) {
+      setMostrarTermo(true);
+      return;
+    }
+
+    await finalizarSalvar();
+  };
+
+  const handleConfirmarTermo = async (resultado) => {
+    const anexosExtra = [];
+    // As imagens dos termos são anexadas apenas no cadastro, evitando anexos
+    // duplicados a cada edição. Na edição, apenas as assinaturas são atualizadas.
+    if (!editando && resultado?.assina && Array.isArray(resultado.arquivos)) {
+      resultado.arquivos.forEach((doc, idx) => {
+        if (!doc?.file) return;
+        anexosExtra.push({
+          localId: `termo-${Date.now()}-${idx}`,
+          file: doc.file,
+          tipo: 'DOCUMENTO',
+          nomeArquivo: doc.nomeArquivo || 'Termo',
+          ehImagem: true,
+          previewUrl: null,
+        });
+      });
+    }
+    const assinaturas = resultado?.assina
+      ? {
+          assinaturaAcolhido: resultado.assinaturaAcolhido ?? null,
+          assinaturaResponsavel: resultado.assinaturaResponsavel ?? null,
+        }
+      : null;
+    const opcoes = resultado?.assina
+      ? {
+          autorizaUsoImagem: resultado.autorizaImagem ?? null,
+          entregaCelular: resultado.entregaCelular ?? null,
+          concordaPertences: resultado.concordaPertences ?? null,
+        }
+      : null;
+    setMostrarTermo(false);
+    await finalizarSalvar(anexosExtra, assinaturas, opcoes);
   };
 
   // A seção de alta aparece na edição e também no cadastro direto no histórico
@@ -688,11 +920,13 @@ export default function AcolhidoForm({
       { id: 'gerais', rotulo: 'Informações gerais' },
       { id: 'medicacoes', rotulo: 'Medicações' },
       { id: 'combinados', rotulo: 'Combinados' },
+      { id: 'pertences', rotulo: 'Pertences' },
       { id: 'anexos', rotulo: 'Anexos' },
     ];
-    // A gestão de ocorrências exige um acolhido já existente (id definido),
-    // por isso a aba só aparece na edição.
+    // A gestão de ocorrências e a edição da assinatura exigem um acolhido já
+    // existente (id definido), por isso as abas só aparecem na edição.
     if (editando) {
+      base.push({ id: 'assinatura', rotulo: 'Assinatura' });
       base.push({
         id: 'ocorrencias',
         rotulo: `Ocorrências (${ocorrenciasDoAcolhido.length})`,
@@ -719,7 +953,17 @@ export default function AcolhidoForm({
   const fotoExibida =
     fotoPreview || (editando && !fotoRemovida ? acolhidoEditando?.fotoUrl ?? '' : '');
 
+  const responsavelSelecionado = responsaveisDisponiveis.find(
+    (r) => String(r.id) === String(form.responsavelId)
+  );
+  const nomeResponsavelSelecionado = responsavelSelecionado?.nome ?? '';
+  // Assinaturas ja existentes para pre-carregar no termo: a do acolhido vem do
+  // proprio registro (na edicao) e a do responsavel vem do responsavel vinculado.
+  const assinaturaAcolhidoAtual = acolhidoEditando?.assinaturaAcolhido ?? null;
+  const assinaturaResponsavelAtual = responsavelSelecionado?.assinatura ?? null;
+
   return (
+    <>
     <form className="card form" onSubmit={handleSubmit}>
       <div className="form-cabecalho">
         <h2>{tituloForm}</h2>
@@ -887,6 +1131,7 @@ export default function AcolhidoForm({
             onChange={handleChange}
             placeholder="acolhido@email.com"
           />
+          {erros.email && <span className="erro">{erros.email}</span>}
         </div>
 
         <div className="campo">
@@ -953,20 +1198,37 @@ export default function AcolhidoForm({
 
         <div className="campo campo-largo">
           <label htmlFor="responsavelId">Responsável *</label>
-          <select
-            id="responsavelId"
-            name="responsavelId"
-            value={form.responsavelId}
-            onChange={handleChange}
-          >
-            <option value="">Selecione...</option>
-            {responsaveisDisponiveis.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.nome}
-                {r.cpf ? ` — ${r.cpf}` : ''}
-              </option>
-            ))}
-          </select>
+          <div className="campo-com-acao">
+            <select
+              id="responsavelId"
+              name="responsavelId"
+              value={form.responsavelId}
+              onChange={handleChange}
+            >
+              <option value="">Selecione...</option>
+              {responsaveisDisponiveis.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nome}
+                  {r.cpf ? ` — ${r.cpf}` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn-secundario"
+              onClick={() =>
+                onCadastrarResponsavel?.({
+                  form,
+                  medicamentosSelecionadosIds,
+                  dosesPorMedicamento,
+                  alocacaoPorMedicamento,
+                  modoHistorico: Boolean(modoHistorico),
+                })
+              }
+            >
+              Cadastrar novo responsável
+            </button>
+          </div>
           {erros.responsavelId && (
             <span className="erro">{erros.responsavelId}</span>
           )}
@@ -1065,7 +1327,18 @@ export default function AcolhidoForm({
       {abaAtiva === 'medicacoes' && (
       <div className="grid">
         <div className="campo campo-largo">
-          <label>Medicamentos prescritos</label>
+          <div className="label-com-acao">
+            <label>Medicamentos prescritos</label>
+            {onCriarMedicamento && (
+              <button
+                type="button"
+                className="btn btn-secundario btn-pequeno"
+                onClick={() => setMostrarNovoMedicamento(true)}
+              >
+                + Cadastrar novo medicamento
+              </button>
+            )}
+          </div>
           <div className="dual-list">
             <div className="dual-list-coluna">
               <span className="dual-list-titulo">Medicamentos disponíveis</span>
@@ -1221,6 +1494,77 @@ export default function AcolhidoForm({
             </span>
           </div>
         )}
+
+        {permitirDosesECombinados && medicamentosSelecionados.length > 0 && (
+          <div className="campo campo-largo">
+            <label>Estoque reservado para este acolhido</label>
+            <div className="tabela-wrapper doses-tabela-wrapper">
+              <table className="tabela doses-tabela">
+                <thead>
+                  <tr>
+                    <th>Medicamento</th>
+                    <th>Livre no estoque</th>
+                    <th>Reservar (comprimidos)</th>
+                    <th>Equivalência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {medicamentosSelecionados.map((m) => {
+                    const porCaixa = Number(m.quantidade_por_caixa) || 0;
+                    const livreBackend = Number(m.total_comprimidos) || 0;
+                    const reservado = alocacaoDoMedicamento(m.id);
+                    const base = Number(reservaBasePorMedicamento[m.id]) || 0;
+                    // Estoque livre em tempo real: soma de volta a reserva já
+                    // persistida deste acolhido e desconta o valor digitado agora.
+                    const livreAtual = livreBackend + base - reservado;
+                    const insuficiente = livreAtual < 0;
+                    const caixas = porCaixa > 0 ? Math.floor(reservado / porCaixa) : 0;
+                    const avulsos = porCaixa > 0 ? reservado % porCaixa : reservado;
+                    return (
+                      <tr key={m.id}>
+                        <td>{m.nome}</td>
+                        <td
+                          className={`doses-estoque-livre${
+                            insuficiente ? ' doses-estoque-insuficiente' : ''
+                          }`}
+                        >
+                          {livreAtual} comp.
+                          {porCaixa > 0 ? ` (caixa: ${porCaixa})` : ''}
+                          {insuficiente && (
+                            <span className="erro"> estoque insuficiente</span>
+                          )}
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min="0"
+                            className="dose-input"
+                            value={reservado}
+                            onChange={(e) => atualizarAlocacao(m.id, e.target.value)}
+                            aria-label={`Estoque reservado - ${m.nome}`}
+                          />
+                        </td>
+                        <td className="doses-estoque-equivalencia">
+                          {porCaixa > 0
+                            ? `${caixas} caixa(s) + ${avulsos} comp.`
+                            : `${reservado} comp.`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <span className="campo-ajuda">
+              Reserve os comprimidos deste medicamento exclusivamente para o
+              acolhido. Eles saem do estoque livre e só podem ser usados por ele.
+              A coluna &quot;Livre no estoque&quot; é recalculada em tempo real
+              conforme você digita — mostrando quanto sobra para reservar a outros
+              acolhidos, mesmo antes de salvar.
+            </span>
+            {erros.reservas && <span className="erro">{erros.reservas}</span>}
+          </div>
+        )}
       </div>
       )}
 
@@ -1362,6 +1706,18 @@ export default function AcolhidoForm({
       </div>
       )}
 
+      {abaAtiva === 'pertences' && (
+      <div className="grid">
+        <PertencesTab
+          acolhidoId={editando ? acolhidoEditando?.id : null}
+          pendentes={pertencesPendentes}
+          onChangePendentes={setPertencesPendentes}
+          onMensagem={onMensagem}
+          onPertencesAlterados={onPertencesAlterados}
+        />
+      </div>
+      )}
+
       {abaAtiva === 'anexos' && (
       <div className="grid">
         <div className="campo campo-largo">
@@ -1472,6 +1828,45 @@ export default function AcolhidoForm({
       </div>
       )}
 
+      {abaAtiva === 'assinatura' && editando && (
+        <div className="grid">
+          <div className="campo campo-largo">
+            <label>Assinatura do acolhido</label>
+            <span className="campo-ajuda">
+              Desenhe ou ajuste a assinatura do acolhido e clique em
+              &quot;Atualizar&quot; para salvar. Use &quot;Limpar&quot; para
+              removê-la.
+            </span>
+            <AssinaturaPad
+              id="edit-assinatura-acolhido-form"
+              canvasRef={canvasAssinaturaEditRef}
+              onFinalizar={setAssinaturaAcolhidoEdit}
+              disabled={salvando}
+              valorInicial={assinaturaAcolhidoEdit}
+            />
+          </div>
+
+          <div className="campo campo-largo">
+            <label>Assinatura do responsável ({nomeResponsavelSelecionado || '—'})</label>
+            <span className="campo-ajuda">
+              Puxada do responsável vinculado. Para alterá-la, edite o responsável
+              na tela de Responsáveis.
+            </span>
+            {assinaturaResponsavelAtual ? (
+              <img
+                className="assinatura-imagem"
+                src={assinaturaResponsavelAtual}
+                alt="Assinatura do responsável"
+              />
+            ) : (
+              <span className="campo-ajuda">
+                Este responsável ainda não possui assinatura cadastrada.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {abaAtiva === 'ocorrencias' && editando && (
         <OcorrenciasDoAcolhido
           acolhidoId={acolhidoEditando?.id}
@@ -1495,5 +1890,30 @@ export default function AcolhidoForm({
         )}
       </div>
     </form>
+
+    {mostrarTermo && (
+      <TermoConcordanciaModal
+        nome={form.nome.trim()}
+        cpf={form.cpf}
+        data={form.dataAcolhimentoCtav}
+        nomeResponsavel={nomeResponsavelSelecionado}
+        pertences={editando ? [] : pertencesPendentes}
+        processando={salvando}
+        assinaturaAcolhidoInicial={assinaturaAcolhidoAtual}
+        assinaturaResponsavelInicial={assinaturaResponsavelAtual}
+        textoConfirmar={editando ? 'Confirmar e salvar' : 'Confirmar e cadastrar'}
+        onConfirmar={handleConfirmarTermo}
+        onCancelar={() => setMostrarTermo(false)}
+        onErro={onErro}
+      />
+    )}
+
+    {mostrarNovoMedicamento && (
+      <NovoMedicamentoModal
+        onCriar={handleMedicamentoCriado}
+        onFechar={() => setMostrarNovoMedicamento(false)}
+      />
+    )}
+    </>
   );
 }

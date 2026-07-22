@@ -2,6 +2,7 @@ package com.ctav.api.controller;
 
 import com.ctav.api.dto.AcolhidoRequestDTO;
 import com.ctav.api.dto.AcolhidoResponseDTO;
+import com.ctav.api.dto.AssinaturasRequestDTO;
 import com.ctav.api.service.AcolhidoService;
 
 import jakarta.inject.Inject;
@@ -90,5 +91,13 @@ public class AcolhidoController {
     @Path("/{id}/foto")
     public Response removerFoto(@PathParam("id") Long id) {
         return Response.ok(acolhidoService.removerFoto(id)).build();
+    }
+
+    @PUT
+    @Path("/{id}/assinaturas")
+    public Response atualizarAssinaturas(@PathParam("id") Long id, AssinaturasRequestDTO dto) {
+        return Response.ok(acolhidoService.atualizarAssinaturas(
+                id,
+                dto.getAssinaturaAcolhido())).build();
     }
 }

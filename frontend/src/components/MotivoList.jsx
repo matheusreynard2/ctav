@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { usePaginacao } from '../hooks/usePaginacao';
+import Paginacao from './Paginacao.jsx';
 
 const resumir = (texto, max = 80) => {
   if (!texto) return '—';
@@ -36,6 +38,9 @@ export default function MotivoList({
       )
     );
   }, [lista, termo]);
+
+  const { paginaAtual, totalPaginas, total, inicio, fim, itensPagina, setPagina } =
+    usePaginacao(filtrados, 10, termo);
 
   const idsFiltrados = filtrados.map((r) => r.id);
   const todosSelecionados =
@@ -142,7 +147,7 @@ export default function MotivoList({
             </tr>
           </thead>
           <tbody>
-            {filtrados.map((r) => (
+            {itensPagina.map((r) => (
               <tr key={r.id} className={selecionados.has(r.id) ? 'linha-selecionada' : ''}>
                 <td className="col-check">
                   <input
@@ -188,6 +193,15 @@ export default function MotivoList({
           </tbody>
         </table>
       )}
+
+      <Paginacao
+        paginaAtual={paginaAtual}
+        totalPaginas={totalPaginas}
+        total={total}
+        inicio={inicio}
+        fim={fim}
+        onMudar={setPagina}
+      />
     </div>
   );
 }

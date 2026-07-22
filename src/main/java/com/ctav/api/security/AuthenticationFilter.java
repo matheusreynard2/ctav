@@ -70,6 +70,10 @@ public class AuthenticationFilter implements ContainerRequestFilter {
             usuarioLogado.setId(uid);
             usuarioLogado.setUsername(jwt.getSubject());
             usuarioLogado.setNome(jwt.getClaim("nome").asString());
+            usuarioLogado.setPermissaoId(jwt.getClaim("perm").asInt());
+            // Conta de dados (tenant). Tokens antigos sem "cid" caem no próprio uid.
+            Long contaId = jwt.getClaim("cid").asLong();
+            usuarioLogado.setContaId(contaId != null ? contaId : uid);
         } catch (Exception ex) {
             abortar(ctx);
         }

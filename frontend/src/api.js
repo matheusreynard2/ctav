@@ -52,6 +52,24 @@ export const authService = {
   me: () => api.get('/auth/me').then((r) => r.data),
 };
 
+export const usuarioService = {
+  // Perfil completo do usuario logado (id somente leitura, username, nome, criadoEm).
+  perfil: () => api.get('/auth/perfil').then((r) => r.data),
+  // Atualiza username e nome; o backend regera o cookie de sessao.
+  atualizarPerfil: (dados) =>
+    api.put('/auth/perfil', dados).then((r) => r.data),
+  // Troca de senha (senha atual + nova).
+  alterarSenha: (dados) => api.put('/auth/senha', dados).then((r) => r.data),
+  // CRUD de usuários da conta (somente administrador).
+  listarUsuarios: () => api.get('/usuarios').then(extrairLista),
+  criarUsuario: (dados) => api.post('/usuarios', dados).then((r) => r.data),
+  atualizarUsuario: (id, dados) =>
+    api.put(`/usuarios/${id}`, dados).then((r) => r.data),
+  excluirUsuario: (id) => api.delete(`/usuarios/${id}`).then((r) => r.data),
+  alterarPermissao: (id, permissaoId) =>
+    api.put(`/usuarios/${id}/permissao`, { permissaoId }).then((r) => r.data),
+};
+
 export const acolhidoService = {
   listar: () => api.get('/acolhidos').then(extrairLista),
   listarHistorico: () => api.get('/acolhidos/historico').then(extrairLista),
@@ -74,6 +92,9 @@ export const acolhidoService = {
   },
   removerFoto: (id) =>
     api.delete(`/acolhidos/${id}/foto`).then(extrairRegistro),
+  // Atualiza somente as assinaturas do termo (data URL base64 ou null).
+  atualizarAssinaturas: (id, dados) =>
+    api.put(`/acolhidos/${id}/assinaturas`, dados).then(extrairRegistro),
 };
 
 export const medicamentoService = {
@@ -106,6 +127,14 @@ export const prescricaoService = {
     api
       .put(`/acolhidos/${acolhidoId}/prescricoes/doses`, prescricoes)
       .then(extrairLista),
+  atualizarEstoqueReservado: (acolhidoId, medicamentoId, totalComprimidos) =>
+    api
+      .put(`/acolhidos/${acolhidoId}/prescricoes/${medicamentoId}/estoque`, {
+        totalComprimidos,
+      })
+      .then(extrairRegistro),
+  sincronizar: (acolhidoId, prescricoes) =>
+    api.put(`/acolhidos/${acolhidoId}/prescricoes`, prescricoes).then(extrairLista),
 };
 
 export const administracaoService = {
@@ -136,16 +165,22 @@ export const relatorioService = {
     } catch (erro) {
       const blob = erro?.response?.data;
       if (blob instanceof Blob) {
-        try {
-          const texto = await blob.text();
-          const json = JSON.parse(texto);
-          if (json?.message) {
-            throw new Error(json.message);
+        const texto = (await blob.text().catch(() => '')).trim();
+        if (texto) {
+          // Extrai a mensagem de erro do backend. Idealmente o corpo é JSON
+          // ({ message }); mas se vier em outro formato, tenta achar "message"
+          // no texto — sem vazar erros internos de JSON.parse para o usuário.
+          let mensagem = '';
+          try {
+            mensagem = JSON.parse(texto)?.message || '';
+          } catch {
+            mensagem =
+              texto.match(/message[=:]\s*"?([^",}]+)"?/i)?.[1]?.trim() || '';
           }
-        } catch (parseErr) {
-          if (parseErr instanceof Error && parseErr.message !== '[object Object]') {
-            throw parseErr;
-          }
+          throw new Error(
+            mensagem ||
+              'Não foi possível gerar o PDF. Tente novamente mais tarde.'
+          );
         }
       }
       throw erro;
@@ -159,6 +194,16 @@ export const combinadoService = {
   criar: (dados) => api.post('/combinados', dados).then(extrairRegistro),
   atualizar: (id, dados) => api.put(`/combinados/${id}`, dados).then(extrairRegistro),
   deletar: (id) => api.delete(`/combinados/${id}`),
+};
+
+export const consultaService = {
+  listar: () => api.get('/consultas').then(extrairLista),
+  buscarPorId: (id) => api.get(`/consultas/${id}`).then(extrairRegistro),
+  criar: (dados) => api.post('/consultas', dados).then(extrairRegistro),
+  atualizar: (id, dados) => api.put(`/consultas/${id}`, dados).then(extrairRegistro),
+  concluir: (id, resumo) =>
+    api.put(`/consultas/${id}/concluir`, { resumo }).then(extrairRegistro),
+  deletar: (id) => api.delete(`/consultas/${id}`),
 };
 
 export const ocorrenciaService = {
@@ -195,6 +240,32 @@ export const anexoService = {
       }),
   deletar: (acolhidoId, anexoId) =>
     api.delete(`/acolhidos/${acolhidoId}/anexos/${anexoId}`),
+};
+
+export const pertenceService = {
+  // Lista todos os pertences de todos os acolhidos do usuário (CRUD geral).
+  listarTodos: () => api.get('/pertences').then(extrairLista),
+  listar: (acolhidoId) =>
+    api.get(`/acolhidos/${acolhidoId}/pertences`).then(extrairLista),
+  criar: (acolhidoId, dados) =>
+    api.post(`/acolhidos/${acolhidoId}/pertences`, dados).then(extrairRegistro),
+  atualizar: (acolhidoId, pertenceId, dados) =>
+    api
+      .put(`/acolhidos/${acolhidoId}/pertences/${pertenceId}`, dados)
+      .then(extrairRegistro),
+  deletar: (acolhidoId, pertenceId) =>
+    api.delete(`/acolhidos/${acolhidoId}/pertences/${pertenceId}`),
+  adicionarFoto: (acolhidoId, pertenceId, arquivo) => {
+    const form = new FormData();
+    form.append('arquivo', arquivo);
+    return api
+      .post(`/acolhidos/${acolhidoId}/pertences/${pertenceId}/fotos`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then(extrairRegistro);
+  },
+  deletarFoto: (acolhidoId, pertenceId, fotoId) =>
+    api.delete(`/acolhidos/${acolhidoId}/pertences/${pertenceId}/fotos/${fotoId}`),
 };
 
 export default api;

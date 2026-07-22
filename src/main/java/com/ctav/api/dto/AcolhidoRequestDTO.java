@@ -78,6 +78,24 @@ public class AcolhidoRequestDTO {
     // Na atualizacao, quando null, mantem o estado atual de arquivamento.
     private Boolean arquivado;
 
+    // Assinaturas do termo de concordancia (imagem PNG em data URL base64).
+    // No cadastro sao gravadas quando o termo e assinado; na atualizacao normal
+    // do formulario vem null e o valor atual e preservado. A do acolhido fica na
+    // propria entidade Acolhido; a do responsavel e roteada para a entidade
+    // Responsavel vinculada (fonte unica).
+    private String assinaturaAcolhido;
+
+    private String assinaturaResponsavel;
+
+    // Opcoes escolhidas nos termos assinados (Acordo e Termo de Celular).
+    // Gravadas no cadastro; na atualizacao normal vem null e o valor atual e
+    // preservado.
+    private Boolean autorizaUsoImagem;
+
+    private Boolean entregaCelular;
+
+    private Boolean concordaPertences;
+
     @Valid
     private List<PrescricaoRequestDTO> prescricoes;
 }

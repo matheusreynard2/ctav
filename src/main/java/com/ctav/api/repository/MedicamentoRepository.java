@@ -25,11 +25,13 @@ public class MedicamentoRepository implements PanacheRepositoryBase<Medicamento,
         return list("id in ?1 and usuario.id = ?2", ids, usuarioId);
     }
 
-    public boolean existsPrescricaoDoMedicamento(Long id) {
-        Number total = (Number) getEntityManager()
-                .createNativeQuery("SELECT COUNT(*) FROM acolhido_medicamento WHERE medicamento_id = :id")
-                .setParameter("id", id)
+    public boolean existsPrescricaoDoMedicamento(Long medicamentoId) {
+        Long total = getEntityManager()
+                .createQuery(
+                        "SELECT COUNT(p) FROM Prescricao p WHERE p.medicamento.id = :id",
+                        Long.class)
+                .setParameter("id", medicamentoId)
                 .getSingleResult();
-        return total.longValue() > 0;
+        return total > 0;
     }
 }

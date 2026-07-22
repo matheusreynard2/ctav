@@ -66,6 +66,13 @@ public class Prescricao {
     @Builder.Default
     private Integer doseNoite = 0;
 
+    // Estoque de comprimidos reservado/alocado exclusivamente para este acolhido.
+    // Debitado a cada administracao registrada e reposto ao desmarcar. O estoque
+    // livre (nao alocado) fica no proprio medicamento.
+    @Column(name = "total_comprimidos", nullable = false)
+    @Builder.Default
+    private Integer totalComprimidos = 0;
+
     @Column(name = "criado_em", updatable = false)
     private LocalDateTime criadoEm;
 

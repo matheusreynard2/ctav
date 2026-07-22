@@ -33,7 +33,36 @@ public class AdministracaoRepository
                 .firstResultOptional();
     }
 
+    // Marcacoes de um medicamento em um periodo, a partir de uma data de corte
+    // (inclusive). Usado para limpar apenas hoje/futuro ao mudar a dose,
+    // preservando os dias que ja passaram.
+    public List<AdministracaoMedicamento> listarPorMedicamentoPeriodoDesde(
+            Long acolhidoId, Long usuarioId, Long medicamentoId, PeriodoDia periodo,
+            LocalDate desde) {
+        return list("acolhido.id = ?1 and usuario.id = ?2 and medicamento.id = ?3 "
+                        + "and periodo = ?4 and data >= ?5",
+                acolhidoId, usuarioId, medicamentoId, periodo, desde);
+    }
+
+    public long deleteByMedicamentoPeriodoDesde(
+            Long acolhidoId, Long usuarioId, Long medicamentoId, PeriodoDia periodo,
+            LocalDate desde) {
+        return delete("acolhido.id = ?1 and usuario.id = ?2 and medicamento.id = ?3 "
+                        + "and periodo = ?4 and data >= ?5",
+                acolhidoId, usuarioId, medicamentoId, periodo, desde);
+    }
+
+    public long deleteByAcolhidoMedicamento(
+            Long acolhidoId, Long usuarioId, Long medicamentoId) {
+        return delete("acolhido.id = ?1 and usuario.id = ?2 and medicamento.id = ?3",
+                acolhidoId, usuarioId, medicamentoId);
+    }
+
     public long deleteByAcolhidoId(Long acolhidoId) {
         return delete("acolhido.id", acolhidoId);
+    }
+
+    public long deleteByMedicamentoId(Long medicamentoId, Long usuarioId) {
+        return delete("medicamento.id = ?1 and usuario.id = ?2", medicamentoId, usuarioId);
     }
 }

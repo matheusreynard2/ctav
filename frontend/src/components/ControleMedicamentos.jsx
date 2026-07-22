@@ -6,7 +6,6 @@ import {
   chaveRegistroAdministracao,
   diasDoMes,
   mapaRegistrosAdministracao,
-  prescricoesComDose,
   rotuloMesAno,
 } from '../utils/controleMedicamentos';
 import GradeControleAdministracao from './GradeControleAdministracao';
@@ -23,6 +22,7 @@ const normalizarPrescricoes = (acolhido) =>
       doseManha: p.doseManha ?? 0,
       doseTarde: p.doseTarde ?? 0,
       doseNoite: p.doseNoite ?? 0,
+      totalComprimidos: p.totalComprimidos ?? 0,
     }));
 
 export default function ControleMedicamentos({
@@ -31,6 +31,7 @@ export default function ControleMedicamentos({
   onErro,
   onSucesso,
   onRecarregarAcolhidos,
+  onRecarregarMedicamentos,
 }) {
   const hoje = new Date();
   const anoAtual = hoje.getFullYear();
@@ -59,22 +60,69 @@ export default function ControleMedicamentos({
   const [acolhidoId, setAcolhidoId] = useState('');
   const [prescricoesLocais, setPrescricoesLocais] = useState([]);
   const [registros, setRegistros] = useState({});
+  // Estado das marcações como está no servidor (base para detectar pendências).
+  const [registrosBase, setRegistrosBase] = useState({});
+  // Marcações alteradas e ainda não salvas: chave -> { medicamentoId, data, periodo }.
+  const [pendentes, setPendentes] = useState(() => new Map());
   const [carregandoRegistros, setCarregandoRegistros] = useState(false);
-  const [salvando, setSalvando] = useState(() => new Set());
+  const [salvandoAdmin, setSalvandoAdmin] = useState(false);
   const [salvandoDoses, setSalvandoDoses] = useState(false);
+  // Início (índice) da semana exibida na grade — múltiplo de 7 dentro do mês.
+  const [semanaInicio, setSemanaInicio] = useState(0);
 
   const acolhidoSelecionado = useMemo(
     () => acolhidosOrdenados.find((a) => String(a.id) === String(acolhidoId)) ?? null,
     [acolhidosOrdenados, acolhidoId]
   );
 
+  // Data de hoje (YYYY-MM-DD, local). Dias anteriores a hoje ficam bloqueados
+  // para administração; a comparação de strings ISO já é cronológica.
+  const hojeIso = useMemo(() => {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  }, []);
+
+  // Doses efetivamente salvas no acolhido (fonte usada pelo backend para o
+  // débito de estoque). O editor abaixo usa prescricoesLocais (edição livre).
+  const prescricoesSalvas = useMemo(
+    () => normalizarPrescricoes(acolhidoSelecionado),
+    [acolhidoSelecionado]
+  );
+
   useEffect(() => {
     setPrescricoesLocais(normalizarPrescricoes(acolhidoSelecionado));
   }, [acolhidoSelecionado]);
 
+  // Medicamentos que possuem alguma marcação no mês exibido. A chave tem o
+  // formato "YYYY-MM-DD-<medId>-<PERIODO>", então o id fica na posição 3.
+  const medsComRegistroMes = useMemo(() => {
+    const set = new Set();
+    Object.keys(registros).forEach((chave) => {
+      const partes = chave.split('-');
+      if (partes.length >= 5) {
+        const medId = Number(partes[3]);
+        if (Number.isFinite(medId)) set.add(medId);
+      }
+    });
+    return set;
+  }, [registros]);
+
+  // A grade reflete as doses JÁ SALVAS. Além dos medicamentos com dose atual,
+  // inclui os que possuem marcações no mês (para que períodos zerados continuem
+  // aparecendo nos dias passados que já tinham registro).
   const prescricoesGrade = useMemo(
-    () => prescricoesComDose({ prescricoes: prescricoesLocais }),
-    [prescricoesLocais]
+    () =>
+      prescricoesSalvas.filter((p) => {
+        const temDose =
+          (Number(p.doseManha) || 0) +
+            (Number(p.doseTarde) || 0) +
+            (Number(p.doseNoite) || 0) >
+          0;
+        return temDose || medsComRegistroMes.has(p.medicamentoId);
+      }),
+    [prescricoesSalvas, medsComRegistroMes]
   );
 
   const dias = useMemo(() => {
@@ -83,6 +131,41 @@ export default function ControleMedicamentos({
     if (!a || !m) return [];
     return diasDoMes(a, m);
   }, [ano, mes]);
+
+  // A grade é exibida por semana (7 dias por vez) para não ficar muito longa.
+  const totalSemanas = Math.max(1, Math.ceil(dias.length / 7));
+  const diasSemana = useMemo(
+    () => dias.slice(semanaInicio, semanaInicio + 7),
+    [dias, semanaInicio]
+  );
+
+  // Ao trocar de mês/ano, posiciona a semana na que contém hoje (mês vigente)
+  // ou na primeira semana do mês.
+  useEffect(() => {
+    if (dias.length === 0) {
+      setSemanaInicio(0);
+      return;
+    }
+    let inicio = 0;
+    if (Number(ano) === anoAtual && Number(mes) === mesAtual) {
+      const idx = dias.indexOf(hojeIso);
+      if (idx >= 0) inicio = Math.floor(idx / 7) * 7;
+    }
+    setSemanaInicio(inicio);
+  }, [dias, ano, mes, anoAtual, mesAtual, hojeIso]);
+
+  const irSemanaAnterior = () =>
+    setSemanaInicio((s) => Math.max(0, s - 7));
+  const irProximaSemana = () =>
+    setSemanaInicio((s) => Math.min((totalSemanas - 1) * 7, s + 7));
+
+  const rotuloSemana = useMemo(() => {
+    if (diasSemana.length === 0) return '';
+    const primeiro = diasSemana[0].slice(8, 10);
+    const ultimo = diasSemana[diasSemana.length - 1].slice(8, 10);
+    const numeroSemana = Math.floor(semanaInicio / 7) + 1;
+    return `Dias ${primeiro}–${ultimo} (semana ${numeroSemana} de ${totalSemanas})`;
+  }, [diasSemana, semanaInicio, totalSemanas]);
 
   const rotulo = useMemo(
     () => rotuloMesAno(Number(ano), Number(mes)),
@@ -95,6 +178,8 @@ export default function ControleMedicamentos({
     const m = Number(mes);
     if (!acolhidoId || !a || !m) {
       setRegistros({});
+      setRegistrosBase({});
+      setPendentes(new Map());
       return () => {
         ativo = false;
       };
@@ -104,11 +189,16 @@ export default function ControleMedicamentos({
       .listarMes(acolhidoId, a, m)
       .then((lista) => {
         if (!ativo) return;
-        setRegistros(mapaRegistrosAdministracao(lista));
+        const mapa = mapaRegistrosAdministracao(lista);
+        setRegistros(mapa);
+        setRegistrosBase(mapa);
+        setPendentes(new Map());
       })
       .catch(() => {
         if (!ativo) return;
         setRegistros({});
+        setRegistrosBase({});
+        setPendentes(new Map());
         onErro?.('Não foi possível carregar o controle de administração do mês.');
       })
       .finally(() => {
@@ -152,36 +242,96 @@ export default function ControleMedicamentos({
           doseNoite: p.doseNoite ?? 0,
         }))
       );
+      // As marcações dos períodos sem alteração são preservadas; os períodos
+      // cuja dose mudou têm as marcações limpas no servidor (checkbox volta a
+      // ficar vazio). Recarrega a grade para refletir o estado atual.
+      const a = Number(ano);
+      const m = Number(mes);
+      if (a && m) {
+        const lista = await administracaoService.listarMes(acolhidoId, a, m);
+        const mapa = mapaRegistrosAdministracao(lista);
+        setRegistros(mapa);
+        setRegistrosBase(mapa);
+        setPendentes(new Map());
+      }
       onRecarregarAcolhidos?.();
+      // O estoque pode ter sido reposto ao limpar marcações de períodos alterados.
+      onRecarregarMedicamentos?.();
       onSucesso?.('Doses salvas com sucesso.');
-    } catch {
-      onErro?.('Não foi possível salvar as doses. Tente novamente.');
+    } catch (err) {
+      onErro?.(
+        err?.response?.data?.message
+          || 'Não foi possível salvar as doses. Tente novamente.'
+      );
     } finally {
       setSalvandoDoses(false);
     }
   };
 
-  const alternarTomado = async (data, medicamentoId, periodo, valorAtual) => {
+  // Alterna a marcação apenas localmente (não persiste). As mudanças ficam
+  // pendentes até o usuário clicar em "Salvar administração".
+  const alternarTomado = (data, medicamentoId, periodo, valorAtual) => {
+    // Dias anteriores a hoje ficam bloqueados: só é possível administrar
+    // (marcar/desmarcar) em dias de hoje em diante.
+    if (data < hojeIso) {
+      onErro?.(
+        'Não é possível alterar a administração de dias anteriores a hoje.'
+      );
+      return;
+    }
+
     const chave = chaveRegistroAdministracao(data, medicamentoId, periodo);
     const novoValor = !valorAtual;
+
     setRegistros((atual) => ({ ...atual, [chave]: novoValor }));
-    setSalvando((atual) => new Set(atual).add(chave));
+    setPendentes((atual) => {
+      const novo = new Map(atual);
+      const base = Boolean(registrosBase[chave]);
+      // Se voltou ao valor do servidor, deixa de ser uma pendência.
+      if (novoValor === base) novo.delete(chave);
+      else novo.set(chave, { medicamentoId, data, periodo });
+      return novo;
+    });
+  };
+
+  // Persiste todas as marcações pendentes de uma vez. O débito/crédito de
+  // estoque reservado ocorre no servidor a cada marcação.
+  const salvarAdministracao = async () => {
+    if (salvandoAdmin || pendentes.size === 0) return;
+    setSalvandoAdmin(true);
+    const erros = [];
     try {
-      await administracaoService.marcar(acolhidoId, {
-        medicamentoId,
-        data,
-        periodo,
-        tomado: novoValor,
-      });
-    } catch {
-      setRegistros((atual) => ({ ...atual, [chave]: valorAtual }));
-      onErro?.('Não foi possível salvar a marcação. Tente novamente.');
+      for (const [chave, info] of pendentes) {
+        try {
+          await administracaoService.marcar(acolhidoId, {
+            medicamentoId: info.medicamentoId,
+            data: info.data,
+            periodo: info.periodo,
+            tomado: Boolean(registros[chave]),
+          });
+        } catch (err) {
+          erros.push(
+            err?.response?.data?.message
+              || 'Não foi possível salvar uma das marcações.'
+          );
+        }
+      }
+      // Recarrega do servidor para refletir o estado real (e o estoque).
+      const a = Number(ano);
+      const m = Number(mes);
+      if (a && m) {
+        const lista = await administracaoService.listarMes(acolhidoId, a, m);
+        const mapa = mapaRegistrosAdministracao(lista);
+        setRegistros(mapa);
+        setRegistrosBase(mapa);
+      }
+      setPendentes(new Map());
+      onRecarregarAcolhidos?.();
+      onRecarregarMedicamentos?.();
+      if (erros.length > 0) onErro?.(erros[0]);
+      else onSucesso?.('Administração salva com sucesso.');
     } finally {
-      setSalvando((atual) => {
-        const novo = new Set(atual);
-        novo.delete(chave);
-        return novo;
-      });
+      setSalvandoAdmin(false);
     }
   };
 
@@ -330,18 +480,55 @@ export default function ControleMedicamentos({
                 </p>
               ) : (
                 <>
+                  <div className="controle-semana-nav">
+                    <button
+                      type="button"
+                      className="btn btn-secundario btn-pequeno"
+                      onClick={irSemanaAnterior}
+                      disabled={semanaInicio === 0}
+                    >
+                      ◀ Semana anterior
+                    </button>
+                    <span className="controle-semana-rotulo">{rotuloSemana}</span>
+                    <button
+                      type="button"
+                      className="btn btn-secundario btn-pequeno"
+                      onClick={irProximaSemana}
+                      disabled={semanaInicio + 7 >= dias.length}
+                    >
+                      Próxima semana ▶
+                    </button>
+                  </div>
+                  <div className="controle-admin-salvar">
+                    <button
+                      type="button"
+                      className="btn btn-primario btn-pequeno"
+                      onClick={salvarAdministracao}
+                      disabled={salvandoAdmin || pendentes.size === 0}
+                    >
+                      {salvandoAdmin
+                        ? 'Salvando...'
+                        : `Salvar administração${
+                            pendentes.size ? ` (${pendentes.size})` : ''
+                          }`}
+                    </button>
+                  </div>
                   <GradeControleAdministracao
-                    dias={dias}
+                    dias={diasSemana}
                     prescricoesComDose={prescricoesGrade}
                     registros={registros}
                     rotuloMesAno={rotulo}
+                    hoje={hojeIso}
                     carregandoRegistros={carregandoRegistros}
-                    salvando={salvando}
+                    salvando={salvandoAdmin ? { has: () => true } : undefined}
                     onAlternarTomado={alternarTomado}
                   />
                   <p className="relatorios-legenda">
-                    Marque a caixa quando o acolhido tomar o medicamento no período.
-                    Só aparecem os períodos com dose definida acima.
+                    Marque as caixas conforme o acolhido tomar o medicamento e clique
+                    em <strong>Salvar administração</strong> para gravar todas as
+                    marcações de uma vez. Os dias anteriores a hoje ficam bloqueados
+                    (apenas leitura). Use os botões acima para navegar entre as
+                    semanas do mês.
                   </p>
                 </>
               )}

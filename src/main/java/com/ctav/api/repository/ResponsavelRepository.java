@@ -31,4 +31,16 @@ public class ResponsavelRepository implements PanacheRepositoryBase<Responsavel,
                 .getSingleResult();
         return total.longValue();
     }
+
+    // Nomes dos acolhidos vinculados a este responsavel (para exibicao no
+    // detalhe/edicao do responsavel), em ordem alfabetica.
+    @SuppressWarnings("unchecked")
+    public List<String> listarNomesAcolhidos(Long responsavelId) {
+        return getEntityManager()
+                .createNativeQuery(
+                        "SELECT nome FROM acolhidos WHERE responsavel_id = :id "
+                                + "ORDER BY nome ASC")
+                .setParameter("id", responsavelId)
+                .getResultList();
+    }
 }

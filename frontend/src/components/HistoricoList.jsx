@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { isoParaData } from '../utils/masks';
+import { usePaginacao } from '../hooks/usePaginacao';
+import Paginacao from './Paginacao.jsx';
 
 const formatarDataHora = (valor) => {
   if (!valor) return '-';
@@ -22,6 +24,7 @@ export default function HistoricoList({
   onRestaurar,
   onRestaurarSelecionados,
   onAnexos,
+  onAssinaturas,
   onNovo,
 }) {
   const [busca, setBusca] = useState('');
@@ -42,6 +45,9 @@ export default function HistoricoList({
       )
     );
   }, [lista, termo]);
+
+  const { paginaAtual, totalPaginas, total, inicio, fim, itensPagina, setPagina } =
+    usePaginacao(filtrados, 10, termo);
 
   const idsFiltrados = filtrados.map((p) => p.id);
   const todosSelecionados =
@@ -152,7 +158,7 @@ export default function HistoricoList({
             </tr>
           </thead>
           <tbody>
-            {filtrados.map((p) => (
+            {itensPagina.map((p) => (
               <tr key={p.id} className={selecionados.has(p.id) ? 'linha-selecionada' : ''}>
                 <td className="col-check">
                   <input
@@ -235,6 +241,18 @@ export default function HistoricoList({
                     <span className="acao-label">Anexos</span>
                   </button>
                   <button
+                    className="btn btn-icone"
+                    onClick={() => onAssinaturas(p)}
+                    title="Assinaturas do termo"
+                    aria-label="Assinaturas do termo"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 17c3-1 5-6 7-6s2 4 4 4 3-3 4-3" />
+                      <path d="M3 21h18" />
+                    </svg>
+                    <span className="acao-label">Assinaturas</span>
+                  </button>
+                  <button
                     className="btn btn-icone btn-restaurar"
                     onClick={() => onRestaurar(p)}
                     title="Restaurar para a lista de acolhidos"
@@ -267,6 +285,15 @@ export default function HistoricoList({
           </tbody>
         </table>
       )}
+
+      <Paginacao
+        paginaAtual={paginaAtual}
+        totalPaginas={totalPaginas}
+        total={total}
+        inicio={inicio}
+        fim={fim}
+        onMudar={setPagina}
+      />
     </div>
   );
 }

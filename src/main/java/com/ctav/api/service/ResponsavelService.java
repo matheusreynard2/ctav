@@ -25,15 +25,19 @@ public class ResponsavelService {
     public List<ResponsavelResponseDTO> listar() {
         return responsavelRepository.listarPorUsuario(usuarioContext.id())
                 .stream()
-                .map(r -> ResponsavelResponseDTO.fromEntity(
-                        r, responsavelRepository.contarAcolhidos(r.getId())))
+                .map(this::montarResposta)
                 .toList();
     }
 
     public ResponsavelResponseDTO buscarPorId(Long id) {
-        Responsavel responsavel = buscarEntidadePorId(id);
+        return montarResposta(buscarEntidadePorId(id));
+    }
+
+    // Monta a resposta incluindo a quantidade e os nomes dos acolhidos vinculados.
+    private ResponsavelResponseDTO montarResposta(Responsavel responsavel) {
+        List<String> nomes = responsavelRepository.listarNomesAcolhidos(responsavel.getId());
         return ResponsavelResponseDTO.fromEntity(
-                responsavel, responsavelRepository.contarAcolhidos(id));
+                responsavel, (long) nomes.size(), nomes);
     }
 
     @Transactional
@@ -51,6 +55,7 @@ public class ResponsavelService {
                 .cep(normalizar(dto.getCep()))
                 .celular(normalizar(dto.getCelular()))
                 .conveniado(Boolean.TRUE.equals(dto.getConveniado()))
+                .assinatura(normalizarAssinatura(dto.getAssinatura()))
                 .build();
         responsavelRepository.persist(responsavel);
         return ResponsavelResponseDTO.fromEntity(responsavel, 0L);
@@ -70,9 +75,13 @@ public class ResponsavelService {
         responsavel.setCep(normalizar(dto.getCep()));
         responsavel.setCelular(normalizar(dto.getCelular()));
         responsavel.setConveniado(Boolean.TRUE.equals(dto.getConveniado()));
+        // A assinatura so e alterada quando enviada explicitamente: null preserva
+        // o valor atual e "" (vazia) remove a assinatura existente.
+        if (dto.getAssinatura() != null) {
+            responsavel.setAssinatura(normalizarAssinatura(dto.getAssinatura()));
+        }
         responsavelRepository.persist(responsavel);
-        return ResponsavelResponseDTO.fromEntity(
-                responsavel, responsavelRepository.contarAcolhidos(id));
+        return montarResposta(responsavel);
     }
 
     @Transactional
@@ -119,5 +128,11 @@ public class ResponsavelService {
     private String normalizarEstado(String estado) {
         String limpo = normalizar(estado);
         return limpo == null ? null : limpo.toUpperCase();
+    }
+
+    // A assinatura e uma data URL base64; so trata vazio/branco como ausencia,
+    // sem alterar o conteudo em si.
+    private String normalizarAssinatura(String valor) {
+        return valor != null && !valor.isBlank() ? valor : null;
     }
 }

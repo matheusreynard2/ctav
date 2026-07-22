@@ -16,6 +16,7 @@ import com.ctav.api.repository.AdministracaoRepository;
 import com.ctav.api.repository.CombinadoRepository;
 import com.ctav.api.repository.MedicamentoRepository;
 import com.ctav.api.repository.OcorrenciaRepository;
+import com.ctav.api.repository.ResponsavelRepository;
 import com.ctav.api.enums.TipoAlta;
 import com.ctav.api.security.UsuarioContext;
 
@@ -55,19 +56,31 @@ public class AcolhidoService {
     MedicamentoRepository medicamentoRepository;
 
     @Inject
+    MedicamentoService medicamentoService;
+
+    @Inject
     MotivoService motivoService;
 
     @Inject
     ResponsavelService responsavelService;
 
     @Inject
+    ResponsavelRepository responsavelRepository;
+
+    @Inject
     CombinadoRepository combinadoRepository;
+
+    @Inject
+    com.ctav.api.repository.ConsultaRepository consultaRepository;
 
     @Inject
     AdministracaoRepository administracaoRepository;
 
     @Inject
     OcorrenciaRepository ocorrenciaRepository;
+
+    @Inject
+    PertenceService pertenceService;
 
     @Inject
     UsuarioContext usuarioContext;
@@ -114,7 +127,17 @@ public class AcolhidoService {
                 .arquivadoEm(Boolean.TRUE.equals(dto.getArquivado())
                         ? LocalDateTime.now()
                         : null)
+                .assinaturaAcolhido(normalizarAssinatura(dto.getAssinaturaAcolhido()))
+                .autorizaUsoImagem(dto.getAutorizaUsoImagem())
+                .entregaCelular(dto.getEntregaCelular())
+                .concordaPertences(dto.getConcordaPertences())
                 .build();
+
+        // A assinatura do responsavel coletada no termo e gravada na propria
+        // entidade Responsavel (fonte unica), reutilizada pelos acolhidos ligados.
+        if (dto.getAssinaturaResponsavel() != null && responsavel != null) {
+            responsavel.setAssinatura(normalizarAssinatura(dto.getAssinaturaResponsavel()));
+        }
 
         sincronizarPrescricoes(acolhido, dto.getPrescricoes());
 
@@ -217,7 +240,8 @@ public class AcolhidoService {
         acolhido.setDescricaoAlta(descricaoAltaEfetiva(dto));
         acolhido.setMotivoAdesao(resolverMotivoAdesao(dto.getMotivoAdesaoId()));
         acolhido.setMotivoDesistencia(resolverMotivoDesistencia(dto));
-        acolhido.setResponsavel(resolverResponsavel(dto.getResponsavelId()));
+        Responsavel responsavel = resolverResponsavel(dto.getResponsavelId());
+        acolhido.setResponsavel(responsavel);
         // So altera o arquivamento quando o cliente envia explicitamente o campo,
         // preservando o estado atual em edicoes normais (form nao envia o campo).
         if (dto.getArquivado() != null) {
@@ -230,26 +254,87 @@ public class AcolhidoService {
                 acolhido.setArquivadoEm(null);
             }
         }
+        // A assinatura do acolhido so e alterada quando enviada explicitamente
+        // (o formulario de edicao nao a envia, preservando o valor atual). A
+        // edicao dedicada usa o endpoint /assinaturas.
+        if (dto.getAssinaturaAcolhido() != null) {
+            acolhido.setAssinaturaAcolhido(normalizarAssinatura(dto.getAssinaturaAcolhido()));
+        }
+        // A assinatura do responsavel, quando enviada, e gravada na entidade
+        // Responsavel vinculada (fonte unica).
+        if (dto.getAssinaturaResponsavel() != null && responsavel != null) {
+            responsavel.setAssinatura(normalizarAssinatura(dto.getAssinaturaResponsavel()));
+        }
+        // As opcoes dos termos so sao alteradas quando enviadas explicitamente
+        // (o formulario de edicao normal nao as envia, preservando o valor atual).
+        if (dto.getAutorizaUsoImagem() != null) {
+            acolhido.setAutorizaUsoImagem(dto.getAutorizaUsoImagem());
+        }
+        if (dto.getEntregaCelular() != null) {
+            acolhido.setEntregaCelular(dto.getEntregaCelular());
+        }
+        if (dto.getConcordaPertences() != null) {
+            acolhido.setConcordaPertences(dto.getConcordaPertences());
+        }
         sincronizarPrescricoes(acolhido, dto.getPrescricoes());
         acolhidoRepository.persist(acolhido);
         return toResponse(acolhido);
     }
 
+    // Atualiza somente a assinatura do acolhido no termo de concordancia. Valor em
+    // branco remove a assinatura. Usado pela edicao direta nas listagens. A
+    // assinatura do responsavel e gerenciada na tela de responsaveis.
+    @Transactional
+    public AcolhidoResponseDTO atualizarAssinaturas(Long id, String assinaturaAcolhido) {
+        Acolhido acolhido = buscarEntidadePorId(id);
+        acolhido.setAssinaturaAcolhido(normalizarAssinatura(assinaturaAcolhido));
+        acolhidoRepository.persist(acolhido);
+        return toResponse(acolhido);
+    }
+
+    private String normalizarAssinatura(String valor) {
+        return valor != null && !valor.isBlank() ? valor : null;
+    }
+
     @Transactional
     public void deletar(Long id) {
         Acolhido acolhido = buscarEntidadePorId(id);
+        // Guarda o responsavel vinculado para, ao final, remove-lo tambem.
+        Long responsavelId = acolhido.getResponsavel() != null
+                ? acolhido.getResponsavel().getId()
+                : null;
         // Remove a foto do S3, se existir.
         removerObjetoS3(acolhido.getFotoChaveS3());
+        // Remove os pertences do acolhido (fotos no S3 + registros no banco).
+        pertenceService.removerPertencesDoAcolhido(id);
         // Remove combinados e administracoes vinculados antes de excluir o acolhido,
         // garantindo a exclusao e evitando violacao de chave estrangeira.
         // (As prescricoes saem em cascata via orphanRemoval do OneToMany.)
         combinadoRepository.deleteByAcolhidoIdAndUsuario(id, usuarioContext.id());
+        consultaRepository.deleteByAcolhidoIdAndUsuario(id, usuarioContext.id());
         administracaoRepository.deleteByAcolhidoId(id);
+        // Devolve ao estoque livre dos medicamentos o que estava reservado para
+        // este acolhido antes de remover as prescricoes (em cascata).
+        if (acolhido.getPrescricoes() != null) {
+            acolhido.getPrescricoes().forEach(p -> medicamentoService.liberarEstoque(
+                    p.getMedicamento(), valorEstoque(p.getTotalComprimidos())));
+        }
         // As ocorrencias nao sao excluidas: apenas os vinculos deste acolhido
         // sao removidos, permanecendo na lista para consulta/edicao (os nomes
         // ficam preservados no snapshot da ocorrencia).
         ocorrenciaRepository.desvincularAcolhido(id);
         acolhidoRepository.delete(acolhido);
+
+        // Exclui tambem o responsavel vinculado, desde que ele nao esteja ligado
+        // a outros acolhidos (evita quebrar registros que compartilham o mesmo
+        // responsavel). O flush garante que a contagem reflita a exclusao acima.
+        if (responsavelId != null) {
+            acolhidoRepository.flush();
+            if (responsavelRepository.contarAcolhidos(responsavelId) == 0) {
+                responsavelRepository.findByIdAndUsuario(responsavelId, usuarioContext.id())
+                        .ifPresent(responsavelRepository::delete);
+            }
+        }
     }
 
     @Transactional
@@ -353,7 +438,13 @@ public class AcolhidoService {
         }
         List<Prescricao> atuais = acolhido.getPrescricoes();
 
-        // Remove as prescricoes cujo medicamento nao veio na requisicao.
+        // Prescricoes que serao removidas (medicamento ausente na requisicao):
+        // devolvem ao estoque livre do medicamento o que estava reservado ao
+        // acolhido, antes de sair da lista (orphanRemoval).
+        atuais.stream()
+                .filter(p -> !porMedicamento.containsKey(p.getMedicamento().getId()))
+                .forEach(p -> medicamentoService.liberarEstoque(
+                        p.getMedicamento(), valorEstoque(p.getTotalComprimidos())));
         atuais.removeIf(p -> !porMedicamento.containsKey(p.getMedicamento().getId()));
 
         Map<Long, Prescricao> atuaisPorMedicamento = atuais.stream()
@@ -361,6 +452,8 @@ public class AcolhidoService {
 
         for (PrescricaoRequestDTO dto : porMedicamento.values()) {
             Prescricao existente = atuaisPorMedicamento.get(dto.getMedicamentoId());
+            Medicamento medicamento = medicamentos.get(dto.getMedicamentoId());
+            int novaReserva = valorEstoque(dto.getTotalComprimidos());
             if (existente != null) {
                 // Atualiza as doses conforme enviado pelo formulario (que na edicao
                 // vem pre-carregado com as doses atuais, preservando-as quando nao ha
@@ -368,18 +461,46 @@ public class AcolhidoService {
                 existente.setDoseManha(valorDose(dto.getDoseManha()));
                 existente.setDoseTarde(valorDose(dto.getDoseTarde()));
                 existente.setDoseNoite(valorDose(dto.getDoseNoite()));
+
+                // Ajusta a reserva de estoque: move comprimidos entre o estoque
+                // livre do medicamento e o estoque exclusivo deste acolhido.
+                int reservaAtual = valorEstoque(existente.getTotalComprimidos());
+                int delta = novaReserva - reservaAtual;
+                if (delta > 0) {
+                    medicamentoService.reservarEstoque(medicamento, delta);
+                } else if (delta < 0) {
+                    medicamentoService.liberarEstoque(medicamento, -delta);
+                }
+                existente.setTotalComprimidos(novaReserva);
             } else {
+                // Medicamento recem-vinculado a este acolhido: remove eventuais
+                // marcacoes de administracao remanescentes de um vinculo anterior
+                // (medicamento que ja foi relacionado, marcado e depois removido),
+                // para que os checkboxes comecem vazios em todos os dias. As
+                // marcacoes dos medicamentos que permanecem vinculados nao sao
+                // tocadas (o ramo "existente != null" acima as preserva).
+                if (acolhido.getId() != null) {
+                    administracaoRepository.deleteByAcolhidoMedicamento(
+                            acolhido.getId(), usuarioContext.id(), dto.getMedicamentoId());
+                }
+                // Reserva o estoque solicitado do estoque livre do medicamento.
+                medicamentoService.reservarEstoque(medicamento, novaReserva);
                 Prescricao nova = Prescricao.builder()
                         .usuario(usuarioContext.referencia())
                         .acolhido(acolhido)
-                        .medicamento(medicamentos.get(dto.getMedicamentoId()))
+                        .medicamento(medicamento)
                         .doseManha(valorDose(dto.getDoseManha()))
                         .doseTarde(valorDose(dto.getDoseTarde()))
                         .doseNoite(valorDose(dto.getDoseNoite()))
+                        .totalComprimidos(novaReserva)
                         .build();
                 atuais.add(nova);
             }
         }
+    }
+
+    private int valorEstoque(Integer valor) {
+        return valor == null || valor < 0 ? 0 : valor;
     }
 
     private int valorDose(Integer valor) {

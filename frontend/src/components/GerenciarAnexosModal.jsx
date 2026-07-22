@@ -73,7 +73,7 @@ const nomePadraoArquivo = (nomeArquivo) => {
   return ponto > 0 ? nomeArquivo.substring(0, ponto) : nomeArquivo;
 };
 
-export default function GerenciarAnexosModal({ acolhido, onFechar }) {
+export default function GerenciarAnexosModal({ acolhido, onFechar, onMensagem }) {
   const acolhidoId = acolhido?.id ?? null;
 
   const [existentes, setExistentes] = useState([]);
@@ -87,7 +87,6 @@ export default function GerenciarAnexosModal({ acolhido, onFechar }) {
   const [tipo, setTipo] = useState('DOCUMENTO');
   const [nomeArquivo, setNomeArquivo] = useState('');
   const [arquivo, setArquivo] = useState(null);
-  const [mensagem, setMensagem] = useState(null);
 
   const inputRef = useRef(null);
   const novosRef = useRef([]);
@@ -105,7 +104,7 @@ export default function GerenciarAnexosModal({ acolhido, onFechar }) {
     []
   );
 
-  const mostrarMensagem = (tipoMsg, texto) => setMensagem({ tipo: tipoMsg, texto });
+  const mostrarMensagem = (tipoMsg, texto) => onMensagem?.(tipoMsg, texto);
 
   const limparFormulario = () => {
     setArquivo(null);
@@ -161,7 +160,6 @@ export default function GerenciarAnexosModal({ acolhido, onFechar }) {
     setExcluirIds([]);
     setThumbs({});
     limparFormulario();
-    setMensagem(null);
     carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acolhidoId]);
@@ -188,7 +186,6 @@ export default function GerenciarAnexosModal({ acolhido, onFechar }) {
 
   const handleSelecionarArquivo = (e) => {
     const f = e.target.files?.[0] ?? null;
-    setMensagem(null);
     if (!f) {
       setArquivo(null);
       return;
@@ -229,7 +226,6 @@ export default function GerenciarAnexosModal({ acolhido, onFechar }) {
       },
     ]);
     limparFormulario();
-    setMensagem(null);
   };
 
   const removerNovo = (localId) => {
@@ -256,7 +252,6 @@ export default function GerenciarAnexosModal({ acolhido, onFechar }) {
 
   const handleBaixar = async (anexo) => {
     setBaixandoId(anexo.id);
-    setMensagem(null);
     try {
       const url = await anexoService.linkDownload(acolhidoId, anexo.id);
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -294,7 +289,6 @@ export default function GerenciarAnexosModal({ acolhido, onFechar }) {
     }
 
     setSalvando(true);
-    setMensagem(null);
     try {
       for (const id of excluirIds) {
         await anexoService.deletar(acolhidoId, id);
@@ -528,12 +522,6 @@ export default function GerenciarAnexosModal({ acolhido, onFechar }) {
         </div>
 
         <div className="detalhes-corpo">
-          {mensagem && (
-            <div className={`alerta alerta-${mensagem.tipo} alerta-modal`}>
-              {mensagem.texto}
-            </div>
-          )}
-
           <section className="detalhes-secao">
             <h4 className="detalhes-secao-titulo">Adicionar anexo</h4>
             <form className="anexo-upload" onSubmit={handleAdicionarLista}>

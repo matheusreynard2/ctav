@@ -127,6 +127,27 @@ public class Acolhido {
     @Column(name = "foto_chave_s3")
     private String fotoChaveS3;
 
+    // Assinatura do acolhido no termo de concordância terapêutica, armazenada
+    // como imagem PNG em data URL (base64). Null quando o termo não foi assinado.
+    // A assinatura do responsável fica na própria entidade Responsavel.
+    @Column(name = "assinatura_acolhido", columnDefinition = "text")
+    private String assinaturaAcolhido;
+
+    // Opcoes escolhidas nos termos assinados no acolhimento:
+    // - autorizaUsoImagem: se autorizou o uso de imagem (Acordo de Acolhimento).
+    // - entregaCelular: se fez a entrega do aparelho celular (Termo de Entrega
+    //   de Celular). Null quando o termo nao foi preenchido.
+    @Column(name = "autoriza_uso_imagem")
+    private Boolean autorizaUsoImagem;
+
+    @Column(name = "entrega_celular")
+    private Boolean entregaCelular;
+
+    // Concordancia com o Termo de Responsabilidade sobre Pertences (assumir a
+    // guarda e responsabilidade pelos pertences). Null quando nao preenchido.
+    @Column(name = "concorda_pertences")
+    private Boolean concordaPertences;
+
     @OneToMany(mappedBy = "acolhido", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @Builder.Default
     private List<Prescricao> prescricoes = new ArrayList<>();
@@ -134,6 +155,10 @@ public class Acolhido {
     @OneToMany(mappedBy = "acolhido", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Anexo> anexos = new ArrayList<>();
+
+    @OneToMany(mappedBy = "acolhido", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Pertence> pertences = new ArrayList<>();
 
     @Column(name = "criado_em", updatable = false)
     private LocalDateTime criadoEm;

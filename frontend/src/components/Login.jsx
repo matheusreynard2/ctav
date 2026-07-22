@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { authService } from '../api';
-import Logo from './Logo.jsx';
+import LogoBetesda from './LogoBetesda.jsx';
+import ModalMensagem from './ModalMensagem.jsx';
 
 export default function Login({ onAutenticado }) {
   const [username, setUsername] = useState('');
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [erro, setErro] = useState('');
+  const [toast, setToast] = useState(null); // { id, texto }
   const [entrando, setEntrando] = useState(false);
+
+  const mostrarErro = (texto) =>
+    setToast({ id: Date.now() + Math.random(), texto });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErro('');
     if (!username.trim() || !senha) {
-      setErro('Informe usuário e senha.');
+      mostrarErro('Informe usuário e senha.');
       return;
     }
     setEntrando(true);
@@ -24,7 +27,7 @@ export default function Login({ onAutenticado }) {
       const msg =
         err?.response?.data?.message ||
         'Não foi possível entrar. Verifique suas credenciais.';
-      setErro(msg);
+      mostrarErro(msg);
     } finally {
       setEntrando(false);
     }
@@ -33,8 +36,8 @@ export default function Login({ onAutenticado }) {
   return (
     <div className="login-tela">
       <form className="card login-card" onSubmit={handleSubmit}>
-        <div className="login-logo" aria-hidden="true">
-          <Logo className="login-logo-img" />
+        <div className="login-logo">
+          <LogoBetesda className="login-logo-img" />
         </div>
 
         <p className="login-subtitulo">Acesse o sistema com suas credenciais.</p>
@@ -76,8 +79,6 @@ export default function Login({ onAutenticado }) {
           </div>
         </div>
 
-        {erro && <div className="alerta alerta-erro login-erro">{erro}</div>}
-
         <button
           type="submit"
           className="btn btn-primario login-btn"
@@ -86,6 +87,15 @@ export default function Login({ onAutenticado }) {
           {entrando ? 'Entrando...' : 'Entrar'}
         </button>
       </form>
+
+      <ModalMensagem
+        key={toast?.id}
+        aberto={Boolean(toast)}
+        tipo="erro"
+        mensagem={toast?.texto ?? ''}
+        duracao={7000}
+        onFechar={() => setToast(null)}
+      />
     </div>
   );
 }

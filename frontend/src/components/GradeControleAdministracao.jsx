@@ -9,6 +9,7 @@ export default function GradeControleAdministracao({
   prescricoesComDose = [],
   registros = {},
   rotuloMesAno = '',
+  hoje = '',
   somenteLeitura = false,
   carregandoRegistros = false,
   salvando,
@@ -66,9 +67,17 @@ export default function GradeControleAdministracao({
                       presc.medicamentoId,
                       p.chave
                     );
+                    const temRegistro = Object.prototype.hasOwnProperty.call(
+                      registros,
+                      chave
+                    );
                     const tomado = Boolean(registros[chave]);
 
-                    if (dose <= 0) {
+                    // Exibe a célula quando há dose atual OU quando existe um
+                    // registro anterior (período que teve dose e foi marcado no
+                    // passado, mesmo que a dose atual esteja zerada).
+                    const mostrar = dose > 0 || temRegistro;
+                    if (!mostrar) {
                       return (
                         <td key={p.chave} className="controle-sem-dose">
                           —
@@ -80,9 +89,11 @@ export default function GradeControleAdministracao({
                       return (
                         <td key={p.chave}>
                           <span className="controle-celula controle-celula-compacta">
-                            <span className="controle-dose">
-                              {dose} {dose === 1 ? 'comp.' : 'comps.'}
-                            </span>
+                            {dose > 0 && (
+                              <span className="controle-dose">
+                                {dose} {dose === 1 ? 'comp.' : 'comps.'}
+                              </span>
+                            )}
                             <span
                               className={`controle-status ${tomado ? 'tomou' : 'pendente'}`}
                             >
@@ -93,16 +104,36 @@ export default function GradeControleAdministracao({
                       );
                     }
 
+                    // Só é possível administrar em dias de hoje em diante e com
+                    // dose atual definida. Dias passados ficam bloqueados.
+                    const passado = Boolean(hoje) && dataIso < hoje;
+                    const podeEditar = !passado && dose > 0;
+                    const desabilitado =
+                      !podeEditar ||
+                      salvando?.has(chave) ||
+                      carregandoRegistros;
+
                     return (
                       <td key={p.chave}>
-                        <label className="controle-celula controle-celula-compacta">
-                          <span className="controle-dose">
-                            {dose} {dose === 1 ? 'comp.' : 'comps.'}
-                          </span>
+                        <label
+                          className={`controle-celula controle-celula-compacta${
+                            passado ? ' controle-celula-bloqueada' : ''
+                          }`}
+                        >
+                          {dose > 0 && (
+                            <span className="controle-dose">
+                              {dose} {dose === 1 ? 'comp.' : 'comps.'}
+                            </span>
+                          )}
                           <input
                             type="checkbox"
                             checked={tomado}
-                            disabled={salvando?.has(chave) || carregandoRegistros}
+                            disabled={desabilitado}
+                            title={
+                              passado
+                                ? 'Dias anteriores a hoje ficam bloqueados'
+                                : undefined
+                            }
                             onChange={() =>
                               onAlternarTomado?.(
                                 dataIso,

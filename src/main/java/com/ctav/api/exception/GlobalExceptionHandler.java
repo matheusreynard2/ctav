@@ -2,6 +2,7 @@ package com.ctav.api.exception;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
@@ -52,7 +53,12 @@ public class GlobalExceptionHandler {
             body.put("error", "Erro de validação");
             body.put("fields", errors);
 
-            return Response.status(Response.Status.BAD_REQUEST).entity(body).build();
+            // Força JSON: sem isso, endpoints com @Produces diferente (ex.: o de
+            // PDF, application/pdf) serializam o corpo de erro incorretamente.
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .type(MediaType.APPLICATION_JSON)
+                    .entity(body)
+                    .build();
         }
     }
 
@@ -74,6 +80,13 @@ public class GlobalExceptionHandler {
         body.put("status", status.getStatusCode());
         body.put("error", status.getReasonPhrase());
         body.put("message", message);
-        return Response.status(status).entity(body).build();
+        // Sempre responde em JSON, independentemente do @Produces do endpoint.
+        // O endpoint de PDF declara application/pdf; sem forçar o tipo aqui, o
+        // corpo de erro sairia serializado como texto (toString do Map), o que
+        // quebrava o JSON.parse no frontend.
+        return Response.status(status)
+                .type(MediaType.APPLICATION_JSON)
+                .entity(body)
+                .build();
     }
 }

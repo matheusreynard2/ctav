@@ -1,22 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   acolhidoService,
   anexoService,
   authService,
   combinadoService,
+  consultaService,
   medicamentoService,
   motivoService,
   ocorrenciaService,
+  pertenceService,
+  prescricaoService,
   responsavelService,
 } from './api';
 import Login from './components/Login.jsx';
 import DetalhesAcolhidoModal from './components/DetalhesAcolhidoModal.jsx';
 import DetalhesCombinadoModal from './components/DetalhesCombinadoModal.jsx';
+import DetalhesConsultaModal from './components/DetalhesConsultaModal.jsx';
 import DetalhesOcorrenciaModal from './components/DetalhesOcorrenciaModal.jsx';
 import DetalhesResponsavelModal from './components/DetalhesResponsavelModal.jsx';
 import GerenciarAnexosModal from './components/GerenciarAnexosModal.jsx';
+import AssinaturasModal from './components/AssinaturasModal.jsx';
 import Header from './components/Header.jsx';
 import ModalConfirmacao from './components/ModalConfirmacao.jsx';
+import ModalAlertaEstoque from './components/ModalAlertaEstoque.jsx';
+import ModalAlertaConsultas from './components/ModalAlertaConsultas.jsx';
+import ConcluirConsultaModal from './components/ConcluirConsultaModal.jsx';
 import ModalMensagem from './components/ModalMensagem.jsx';
 import AcolhidoForm from './components/AcolhidoForm.jsx';
 import AcolhidoList from './components/AcolhidoList.jsx';
@@ -27,13 +35,38 @@ import MotivoForm from './components/MotivoForm.jsx';
 import MotivoList from './components/MotivoList.jsx';
 import CombinadoForm from './components/CombinadoForm.jsx';
 import CombinadoList from './components/CombinadoList.jsx';
+import ConsultaForm from './components/ConsultaForm.jsx';
+import ConsultaList from './components/ConsultaList.jsx';
+import PertenceForm from './components/PertenceForm.jsx';
+import PertenceList from './components/PertenceList.jsx';
+import DetalhesPertenceModal from './components/DetalhesPertenceModal.jsx';
 import OcorrenciaForm from './components/OcorrenciaForm.jsx';
 import OcorrenciaList from './components/OcorrenciaList.jsx';
 import ResponsavelForm from './components/ResponsavelForm.jsx';
 import ResponsavelList from './components/ResponsavelList.jsx';
 import Relatorios from './components/Relatorios.jsx';
+import Documentos from './components/Documentos.jsx';
+import ConfiguracoesUsuario from './components/ConfiguracoesUsuario.jsx';
 import ControleMedicamentos from './components/ControleMedicamentos.jsx';
+import GestaoMedicacao from './components/GestaoMedicacao.jsx';
+import LogoBetesda from './components/LogoBetesda.jsx';
 import { exportTutorialPdf } from './utils/exportarRelatoriosPdf';
+import { filtrarAlertasEstoquePorAcolhido } from './utils/estoqueMedicamentos';
+import { filtrarConsultasProximas } from './utils/consultas';
+
+// Paginas acessiveis aos perfis nao administradores (psicologo/advogado/
+// financeiro): pagina inicial, relatorios e as configuracoes da propria conta.
+const PAGINAS_PERMITIDAS_NAO_ADMIN = ['inicio', 'relatorios', 'configuracoes'];
+
+// Paginas de agendamento de consultas, liberadas somente para psicologo (2)
+// (o administrador ja tem acesso total).
+const PAGINAS_CONSULTAS = ['consultas', 'cadastro-consulta'];
+
+// Paginas liberadas para um perfil nao administrador conforme a permissao.
+const paginasPermitidasNaoAdmin = (permissaoId) =>
+  permissaoId === 2
+    ? [...PAGINAS_PERMITIDAS_NAO_ADMIN, ...PAGINAS_CONSULTAS]
+    : PAGINAS_PERMITIDAS_NAO_ADMIN;
 
 export default function App() {
   const [pagina, setPagina] = useState('inicio');
@@ -45,8 +78,12 @@ export default function App() {
   const [carregandoAcolhidos, setCarregandoAcolhidos] = useState(false);
   const [salvandoAcolhido, setSalvandoAcolhido] = useState(false);
   const [acolhidoEditando, setAcolhidoEditando] = useState(null);
+  // Rascunho do formulário de acolhido preservado ao ir cadastrar um novo
+  // responsável e voltar (para não perder os dados já digitados).
+  const [acolhidoRascunho, setAcolhidoRascunho] = useState(null);
   const [acolhidoSelecionado, setAcolhidoSelecionado] = useState(null);
   const [acolhidoAnexos, setAcolhidoAnexos] = useState(null);
+  const [acolhidoAssinaturas, setAcolhidoAssinaturas] = useState(null);
   const [acolhidoParaExcluir, setAcolhidoParaExcluir] = useState(null);
   const [excluindoAcolhido, setExcluindoAcolhido] = useState(false);
 
@@ -66,6 +103,8 @@ export default function App() {
   const [medicamentoEditando, setMedicamentoEditando] = useState(null);
   const [medicamentoParaExcluir, setMedicamentoParaExcluir] = useState(null);
   const [excluindoMedicamento, setExcluindoMedicamento] = useState(false);
+  const [alertaEstoqueMedicamentos, setAlertaEstoqueMedicamentos] = useState(null);
+  const alertaEstoqueExibidoRef = useRef(false);
 
   // Motivos de adesao e desistencia (CRUD e uso no cadastro de acolhido).
   const [motivosAdesao, setMotivosAdesao] = useState([]);
@@ -83,6 +122,26 @@ export default function App() {
   const [combinadoSelecionado, setCombinadoSelecionado] = useState(null);
   const [combinadoParaExcluir, setCombinadoParaExcluir] = useState(null);
   const [excluindoCombinado, setExcluindoCombinado] = useState(false);
+
+  const [pertencesGerais, setPertencesGerais] = useState([]);
+  const [carregandoPertencesGerais, setCarregandoPertencesGerais] = useState(false);
+  const [salvandoPertence, setSalvandoPertence] = useState(false);
+  const [pertenceEditando, setPertenceEditando] = useState(null);
+  const [pertenceSelecionado, setPertenceSelecionado] = useState(null);
+  const [pertenceParaExcluir, setPertenceParaExcluir] = useState(null);
+  const [excluindoPertence, setExcluindoPertence] = useState(false);
+
+  const [consultas, setConsultas] = useState([]);
+  const [carregandoConsultas, setCarregandoConsultas] = useState(false);
+  const [salvandoConsulta, setSalvandoConsulta] = useState(false);
+  const [consultaEditando, setConsultaEditando] = useState(null);
+  const [consultaSelecionada, setConsultaSelecionada] = useState(null);
+  const [consultaParaExcluir, setConsultaParaExcluir] = useState(null);
+  const [excluindoConsulta, setExcluindoConsulta] = useState(false);
+  const [consultaParaConcluir, setConsultaParaConcluir] = useState(null);
+  const [concluindoConsulta, setConcluindoConsulta] = useState(false);
+  const [alertaConsultas, setAlertaConsultas] = useState(null);
+  const alertaConsultasExibidoRef = useRef(false);
 
   const [ocorrencias, setOcorrencias] = useState([]);
   const [carregandoOcorrencias, setCarregandoOcorrencias] = useState(false);
@@ -205,6 +264,30 @@ export default function App() {
     }
   };
 
+  const carregarPertencesGerais = async () => {
+    setCarregandoPertencesGerais(true);
+    try {
+      const dados = await pertenceService.listarTodos();
+      setPertencesGerais(Array.isArray(dados) ? dados : []);
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar pertences.'));
+    } finally {
+      setCarregandoPertencesGerais(false);
+    }
+  };
+
+  const carregarConsultas = async () => {
+    setCarregandoConsultas(true);
+    try {
+      const dados = await consultaService.listar();
+      setConsultas(Array.isArray(dados) ? dados : []);
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao carregar consultas.'));
+    } finally {
+      setCarregandoConsultas(false);
+    }
+  };
+
   const carregarOcorrencias = async () => {
     setCarregandoOcorrencias(true);
     try {
@@ -250,32 +333,110 @@ export default function App() {
 
   // Sessao expirada (401 em qualquer rota protegida) -> volta ao login.
   useEffect(() => {
-    const aoExpirar = () => setUsuario(null);
+    const aoExpirar = () => {
+      alertaEstoqueExibidoRef.current = false;
+      setAlertaEstoqueMedicamentos(null);
+      alertaConsultasExibidoRef.current = false;
+      setAlertaConsultas(null);
+      setUsuario(null);
+    };
     window.addEventListener('auth:expirado', aoExpirar);
     return () => window.removeEventListener('auth:expirado', aoExpirar);
   }, []);
 
-  // Carrega os dados somente quando ha um usuario autenticado.
+  // Permissao de acesso: 1 = administrador (tudo), 2 = psicologo, 3 = advogado
+  // (somente inicio e relatorios). Token/sessao legada sem permissao => admin.
+  const permissaoId = usuario?.permissaoId ?? 1;
+  const ehAdmin = permissaoId === 1;
+  // Agendamento de consultas: administrador (1) e psicologo (2).
+  const podeConsultas = ehAdmin || permissaoId === 2;
+
+  // Reforca no cliente a restricao de paginas para perfis nao administradores.
+  useEffect(() => {
+    if (!usuario || ehAdmin) return;
+    if (!paginasPermitidasNaoAdmin(permissaoId).includes(pagina)) {
+      setPagina('inicio');
+    }
+  }, [usuario, ehAdmin, permissaoId, pagina]);
+
+  // Carrega os dados somente quando ha um usuario autenticado. Perfis sem acesso
+  // total carregam apenas o necessario para a pagina de relatorios (acolhidos e
+  // historico); os demais endpoints ficam bloqueados por permissao no backend.
   useEffect(() => {
     if (!usuario) return;
     carregarAcolhidos();
     carregarHistorico();
+    // Consultas: liberadas para psicologo e administrador.
+    if (podeConsultas) carregarConsultas();
+    if (!ehAdmin) return;
     carregarMedicamentos();
     carregarMotivos();
     carregarCombinados();
     carregarOcorrencias();
     carregarResponsaveis();
+    carregarPertencesGerais();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usuario]);
+  }, [usuario, ehAdmin, podeConsultas]);
+
+  // Alerta de estoque baixo ao entrar (login ou sessao restaurada). O estoque
+  // agora e reservado por acolhido; o alerta lista o acolhido e o medicamento
+  // cujo estoque reservado esta acabando.
+  useEffect(() => {
+    if (!usuario || !ehAdmin || carregandoAcolhidos || alertaEstoqueExibidoRef.current) {
+      return;
+    }
+    const baixo = filtrarAlertasEstoquePorAcolhido(acolhidos);
+    if (baixo.length > 0) {
+      setAlertaEstoqueMedicamentos(baixo);
+      alertaEstoqueExibidoRef.current = true;
+    }
+  }, [usuario, ehAdmin, acolhidos, carregandoAcolhidos]);
+
+  // Aviso de consultas proximas ao entrar (login ou sessao restaurada), para
+  // psicologo e administrador. Lista as consultas agendadas para as proximas
+  // 24 horas, destacando as mais urgentes (3h, 2h, 1h e 15 min).
+  useEffect(() => {
+    if (!usuario || !podeConsultas || carregandoConsultas || alertaConsultasExibidoRef.current) {
+      return;
+    }
+    const proximas = filtrarConsultasProximas(consultas);
+    if (proximas.length > 0) {
+      setAlertaConsultas(proximas);
+      alertaConsultasExibidoRef.current = true;
+    }
+  }, [usuario, podeConsultas, consultas, carregandoConsultas]);
 
   const handleNavegar = (novaPagina) => {
     setPagina(novaPagina);
     setAcolhidoEditando(null);
+    setAcolhidoRascunho(null);
     setMedicamentoEditando(null);
     setMotivoEditando(null);
     setCombinadoEditando(null);
+    setConsultaEditando(null);
     setOcorrenciaEditando(null);
     setResponsavelEditando(null);
+    setPertenceEditando(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Vai cadastrar um responsável a partir do formulário de acolhido, guardando
+  // o rascunho para retornar e continuar o cadastro depois de salvar.
+  const handleCadastrarResponsavelDeAcolhido = (rascunho) => {
+    setAcolhidoRascunho(rascunho);
+    setResponsavelEditando(null);
+    setPagina('cadastro-responsavel');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Volta do cadastro de responsável para o formulário de acolhido, sem salvar,
+  // preservando o rascunho (dados já preenchidos) do acolhido.
+  const handleVoltarParaAcolhidoDoResponsavel = () => {
+    if (!acolhidoRascunho) return;
+    setResponsavelEditando(null);
+    setPagina(
+      acolhidoRascunho.modoHistorico ? 'cadastro-historico' : 'cadastro-acolhido'
+    );
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -286,6 +447,7 @@ export default function App() {
   const fecharModal = () => {
     const destino = modal?.paginaDestino;
     setModal(null);
+    setAcolhidoRascunho(null);
     if (destino === 'acolhidos') {
       setAcolhidoEditando(null);
       setPagina('acolhidos');
@@ -298,9 +460,17 @@ export default function App() {
     } else if (destino === 'combinados') {
       setCombinadoEditando(null);
       setPagina('combinados');
+    } else if (destino === 'consultas') {
+      setConsultaEditando(null);
+      setPagina('consultas');
     } else if (destino === 'ocorrencias') {
       setOcorrenciaEditando(null);
       setPagina('ocorrencias');
+    } else if (destino === 'pertences') {
+      setPertenceEditando(null);
+      // Recarrega para garantir dados atualizados (acolhido e fotos) ao listar/editar.
+      carregarPertencesGerais();
+      setPagina('pertences');
     } else if (destino === 'responsaveis') {
       setResponsavelEditando(null);
       setPagina('responsaveis');
@@ -314,11 +484,36 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Cria os pertences pendentes (do cadastro novo) e faz upload das fotos de
+  // cada um. Retorna a quantidade de falhas para compor a mensagem final.
+  const criarPertencesPendentes = async (acolhidoId, pertences = []) => {
+    let falhas = 0;
+    for (const p of pertences) {
+      try {
+        const criado = await pertenceService.criar(acolhidoId, {
+          quantidade: p.quantidade,
+          item: p.item,
+        });
+        for (const f of p.fotos || []) {
+          try {
+            await pertenceService.adicionarFoto(acolhidoId, criado.id, f.file);
+          } catch {
+            falhas += 1;
+          }
+        }
+      } catch {
+        falhas += 1;
+      }
+    }
+    return falhas;
+  };
+
   const salvarAcolhido = async (
     dados,
     anexosPendentes = [],
     foto = {},
     combinadosPendentes = [],
+    pertencesPendentes = [],
     contexto = 'acolhidos'
   ) => {
     const noHistorico = contexto === 'historico';
@@ -360,6 +555,15 @@ export default function App() {
         await carregarAcolhidos();
         await carregarHistorico();
         await carregarCombinados();
+        // Recarrega os medicamentos: ao salvar o acolhido, as prescrições
+        // reservam/liberam estoque livre dos medicamentos; sem isso, o estoque
+        // exibido nas páginas de medicamentos ficaria desatualizado até um F5.
+        await carregarMedicamentos();
+        // Atualiza os responsáveis para refletir o vínculo com o acolhido
+        // (quantidade e nomes dos acolhidos vinculados) e a assinatura.
+        await carregarResponsaveis();
+        // Mantém a lista geral de pertences sincronizada após a edição.
+        await carregarPertencesGerais();
 
         const problemas = [];
         if (falhaFotoEdit) problemas.push('a foto');
@@ -405,16 +609,31 @@ export default function App() {
         }
       }
 
+      const falhasPertences = await criarPertencesPendentes(
+        criado.id,
+        pertencesPendentes
+      );
+
       await carregarAcolhidos();
       await carregarHistorico();
       await carregarCombinados();
+      // Recarrega os medicamentos: ao cadastrar o acolhido, as prescrições
+      // reservam estoque livre dos medicamentos; sem isso, o estoque exibido
+      // nas páginas de medicamentos ficaria desatualizado até um F5.
+      await carregarMedicamentos();
+      // Atualiza os responsáveis para refletir o vínculo recém-criado e a
+      // assinatura eventualmente coletada no termo.
+      await carregarResponsaveis();
+      // Reflete na lista geral os pertences criados junto com o novo acolhido.
+      await carregarPertencesGerais();
 
       const ondeCadastrado = noHistorico ? ' no histórico' : '';
-      if (falhas > 0 || falhaFoto || falhasCombinados > 0) {
+      if (falhas > 0 || falhaFoto || falhasCombinados > 0 || falhasPertences > 0) {
         const partes = [];
         if (falhas > 0) partes.push(`${falhas} anexo(s)`);
         if (falhaFoto) partes.push('a foto');
         if (falhasCombinados > 0) partes.push(`${falhasCombinados} combinado(s)`);
+        if (falhasPertences > 0) partes.push(`${falhasPertences} pertence(s)/foto(s)`);
         mostrarMensagem(
           'erro',
           `Acolhido cadastrado${ondeCadastrado}, mas ${partes.join(' e ')} não puderam ser enviados.`
@@ -432,11 +651,37 @@ export default function App() {
     }
   };
 
-  const handleSalvarAcolhido = (dados, anexosPendentes = [], foto = {}, combinadosPendentes = []) =>
-    salvarAcolhido(dados, anexosPendentes, foto, combinadosPendentes, 'acolhidos');
+  const handleSalvarAcolhido = (
+    dados,
+    anexosPendentes = [],
+    foto = {},
+    combinadosPendentes = [],
+    pertencesPendentes = []
+  ) =>
+    salvarAcolhido(
+      dados,
+      anexosPendentes,
+      foto,
+      combinadosPendentes,
+      pertencesPendentes,
+      'acolhidos'
+    );
 
-  const handleSalvarHistorico = (dados, anexosPendentes = [], foto = {}, combinadosPendentes = []) =>
-    salvarAcolhido(dados, anexosPendentes, foto, combinadosPendentes, 'historico');
+  const handleSalvarHistorico = (
+    dados,
+    anexosPendentes = [],
+    foto = {},
+    combinadosPendentes = [],
+    pertencesPendentes = []
+  ) =>
+    salvarAcolhido(
+      dados,
+      anexosPendentes,
+      foto,
+      combinadosPendentes,
+      pertencesPendentes,
+      'historico'
+    );
 
   const handleExibirAcolhido = (acolhido) => {
     setAcolhidoSelecionado(acolhido);
@@ -452,6 +697,22 @@ export default function App() {
 
   const handleFecharAnexosAcolhido = () => {
     setAcolhidoAnexos(null);
+  };
+
+  const handleAssinaturasAcolhido = (acolhido) => {
+    setAcolhidoAssinaturas(acolhido);
+  };
+
+  const handleFecharAssinaturas = () => {
+    setAcolhidoAssinaturas(null);
+  };
+
+  const handleAssinaturasSalvas = async () => {
+    setAcolhidoAssinaturas(null);
+    // Recarrega as listas para refletir as novas assinaturas nos detalhes.
+    await carregarAcolhidos();
+    await carregarHistorico();
+    mostrarMensagem('sucesso', 'Assinaturas atualizadas com sucesso.');
   };
 
   const handleEditarAcolhido = (acolhido) => {
@@ -489,6 +750,13 @@ export default function App() {
       await carregarHistorico();
       await carregarCombinados();
       await carregarOcorrencias();
+      // Excluir o acolhido devolve ao estoque livre o que estava reservado a
+      // ele; recarrega os medicamentos para refletir o estoque atualizado.
+      await carregarMedicamentos();
+      // O responsável vinculado pode ter sido excluído junto; atualiza a lista.
+      await carregarResponsaveis();
+      // Os pertences do acolhido foram excluídos junto; atualiza a lista geral.
+      await carregarPertencesGerais();
     } catch (err) {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir acolhido.'));
     } finally {
@@ -590,18 +858,40 @@ export default function App() {
   };
 
   const handleSalvarMedicamento = async (dados) => {
+    // `reservas` (opcional) traz as reservas por acolhido definidas no próprio
+    // formulário do medicamento; são aplicadas após criar/atualizar o registro.
+    const { reservas, ...med } = dados;
+    const editando = Boolean(medicamentoEditando);
     setSalvandoMedicamento(true);
     try {
-      if (medicamentoEditando) {
-        await medicamentoService.atualizar(medicamentoEditando.id, dados);
-        await carregarMedicamentos();
-        abrirModalSucesso('Medicamento atualizado com sucesso.', 'medicamentos');
+      let medId;
+      if (editando) {
+        await medicamentoService.atualizar(medicamentoEditando.id, med);
+        medId = medicamentoEditando.id;
       } else {
-        await medicamentoService.criar(dados);
+        const criado = await medicamentoService.criar(med);
+        medId = criado?.id;
         setMedicamentoEditando(null);
-        await carregarMedicamentos();
-        abrirModalSucesso('Medicamento cadastrado com sucesso.', 'medicamentos');
       }
+
+      if (medId != null && Array.isArray(reservas)) {
+        for (const r of reservas) {
+          await prescricaoService.atualizarEstoqueReservado(
+            r.acolhidoId,
+            medId,
+            r.totalComprimidos
+          );
+        }
+      }
+
+      await carregarMedicamentos();
+      await carregarAcolhidos();
+      abrirModalSucesso(
+        editando
+          ? 'Medicamento atualizado com sucesso.'
+          : 'Medicamento cadastrado com sucesso.',
+        'medicamentos'
+      );
     } catch (err) {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar medicamento.'));
     } finally {
@@ -613,6 +903,63 @@ export default function App() {
     setMedicamentoEditando(medicamento);
     setPagina('cadastro-medicamento');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Cadastro rápido de medicamento a partir da aba "Medicações" do acolhido.
+  // Cria o medicamento, recarrega a lista disponível e devolve o registro criado
+  // para que o formulário do acolhido possa incluí-lo automaticamente.
+  const handleCriarMedicamentoInline = async (dados) => {
+    try {
+      const novo = await medicamentoService.criar(dados);
+      await carregarMedicamentos();
+      mostrarMensagem('sucesso', 'Medicamento cadastrado e adicionado à prescrição.');
+      return novo;
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao cadastrar medicamento.'));
+      throw err;
+    }
+  };
+
+  // Edição inline dos campos de estoque diretamente na lista de medicamentos.
+  // Reenvia nome/descrição inalterados e o backend recalcula as caixas.
+  const handleAtualizarCamposMedicamento = async (medicamento, campos) => {
+    try {
+      await medicamentoService.atualizar(medicamento.id, {
+        nome: medicamento.nome,
+        descricao: medicamento.descricao,
+        quantidade_por_caixa: campos.quantidade_por_caixa,
+        total_comprimidos: campos.total_comprimidos,
+      });
+      await carregarMedicamentos();
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao atualizar o medicamento.'));
+      throw err;
+    }
+  };
+
+  // Edição inline do estoque reservado de um medicamento para um acolhido,
+  // direto na listagem de medicamentos. Recarrega medicamentos (estoque livre)
+  // e acolhidos (reservas) para refletir a movimentação.
+  const handleAtualizarEstoqueReservado = async (
+    acolhidoId,
+    medicamentoId,
+    novoTotal
+  ) => {
+    try {
+      await prescricaoService.atualizarEstoqueReservado(
+        acolhidoId,
+        medicamentoId,
+        novoTotal
+      );
+      await carregarMedicamentos();
+      await carregarAcolhidos();
+    } catch (err) {
+      mostrarMensagem(
+        'erro',
+        extrairErroApi(err, 'Erro ao atualizar o estoque reservado.')
+      );
+      throw err;
+    }
   };
 
   const handleCancelarEdicaoMedicamento = () => {
@@ -788,6 +1135,192 @@ export default function App() {
     }
   };
 
+  const handleSalvarConsulta = async (dados) => {
+    setSalvandoConsulta(true);
+    try {
+      if (consultaEditando) {
+        await consultaService.atualizar(consultaEditando.id, dados);
+        await carregarConsultas();
+        abrirModalSucesso('Consulta atualizada com sucesso.', 'consultas');
+      } else {
+        await consultaService.criar(dados);
+        setConsultaEditando(null);
+        await carregarConsultas();
+        abrirModalSucesso('Consulta agendada com sucesso.', 'consultas');
+      }
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar consulta.'));
+    } finally {
+      setSalvandoConsulta(false);
+    }
+  };
+
+  const handleExibirConsulta = (consulta) => {
+    setConsultaSelecionada(consulta);
+  };
+
+  const handleFecharDetalhesConsulta = () => {
+    setConsultaSelecionada(null);
+  };
+
+  const handleEditarConsulta = (consulta) => {
+    setConsultaEditando(consulta);
+    setPagina('cadastro-consulta');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleConcluirConsulta = (consulta) => {
+    if (!consulta?.id) return;
+    setConsultaParaConcluir(consulta);
+  };
+
+  const cancelarConclusaoConsulta = () => {
+    if (concluindoConsulta) return;
+    setConsultaParaConcluir(null);
+  };
+
+  const confirmarConclusaoConsulta = async (resumo) => {
+    if (!consultaParaConcluir?.id) return;
+    setConcluindoConsulta(true);
+    try {
+      await consultaService.concluir(consultaParaConcluir.id, resumo);
+      setConsultaParaConcluir(null);
+      await carregarConsultas();
+      mostrarMensagem('sucesso', 'Consulta marcada como realizada.');
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao concluir consulta.'));
+    } finally {
+      setConcluindoConsulta(false);
+    }
+  };
+
+  const handleCancelarEdicaoConsulta = () => {
+    setConsultaEditando(null);
+    setPagina('consultas');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleExcluirConsulta = (consulta) => {
+    setConsultaParaExcluir(consulta);
+  };
+
+  const cancelarExclusaoConsulta = () => {
+    if (excluindoConsulta) return;
+    setConsultaParaExcluir(null);
+  };
+
+  const confirmarExclusaoConsulta = async () => {
+    if (!consultaParaExcluir) return;
+    setExcluindoConsulta(true);
+    try {
+      await consultaService.deletar(consultaParaExcluir.id);
+      mostrarMensagem('sucesso', 'Consulta excluída com sucesso.');
+      if (consultaEditando?.id === consultaParaExcluir.id) {
+        setConsultaEditando(null);
+      }
+      setConsultaParaExcluir(null);
+      await carregarConsultas();
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir consulta.'));
+    } finally {
+      setExcluindoConsulta(false);
+    }
+  };
+
+  // ===== Pertences (CRUD separado) =====
+  const handleSalvarPertence = async (payload, fotosPendentes = []) => {
+    setSalvandoPertence(true);
+    try {
+      if (pertenceEditando) {
+        await pertenceService.atualizar(pertenceEditando.acolhidoId, pertenceEditando.id, {
+          quantidade: payload.quantidade,
+          item: payload.item,
+        });
+        await carregarPertencesGerais();
+        abrirModalSucesso('Pertence atualizado com sucesso.', 'pertences');
+      } else {
+        const criado = await pertenceService.criar(payload.acolhidoId, {
+          quantidade: payload.quantidade,
+          item: payload.item,
+        });
+        let falhasFotos = 0;
+        for (const f of fotosPendentes) {
+          try {
+            await pertenceService.adicionarFoto(payload.acolhidoId, criado.id, f.file);
+          } catch {
+            falhasFotos += 1;
+          }
+        }
+        setPertenceEditando(null);
+        await carregarPertencesGerais();
+        if (falhasFotos > 0) {
+          mostrarMensagem(
+            'erro',
+            `Pertence cadastrado, mas ${falhasFotos} foto(s) não puderam ser enviadas.`
+          );
+        } else {
+          abrirModalSucesso('Pertence cadastrado com sucesso.', 'pertences');
+        }
+      }
+      return true;
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar pertence.'));
+      return null;
+    } finally {
+      setSalvandoPertence(false);
+    }
+  };
+
+  const handleEditarPertence = (pertence) => {
+    setPertenceEditando(pertence);
+    setPagina('cadastro-pertence');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelarEdicaoPertence = () => {
+    setPertenceEditando(null);
+    setPagina('pertences');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleExibirPertence = (pertence) => {
+    setPertenceSelecionado(pertence);
+  };
+
+  const handleFecharDetalhesPertence = () => {
+    setPertenceSelecionado(null);
+  };
+
+  const handleExcluirPertence = (pertence) => {
+    setPertenceParaExcluir(pertence);
+  };
+
+  const cancelarExclusaoPertence = () => {
+    if (excluindoPertence) return;
+    setPertenceParaExcluir(null);
+  };
+
+  const confirmarExclusaoPertence = async () => {
+    if (!pertenceParaExcluir) return;
+    setExcluindoPertence(true);
+    try {
+      await pertenceService.deletar(
+        pertenceParaExcluir.acolhidoId,
+        pertenceParaExcluir.id
+      );
+      mostrarMensagem('sucesso', 'Pertence excluído com sucesso.');
+      if (pertenceEditando?.id === pertenceParaExcluir.id) {
+        setPertenceEditando(null);
+      }
+      setPertenceParaExcluir(null);
+      await carregarPertencesGerais();
+    } catch (err) {
+      mostrarMensagem('erro', extrairErroApi(err, 'Erro ao excluir pertence.'));
+    } finally {
+      setExcluindoPertence(false);
+    }
+  };
+
   const handleSalvarOcorrencia = async (dados) => {
     setSalvandoOcorrencia(true);
     try {
@@ -898,10 +1431,29 @@ export default function App() {
         await carregarHistorico();
         abrirModalSucesso('Responsável atualizado com sucesso.', 'responsaveis');
       } else {
-        await responsavelService.criar(dados);
+        const criado = await responsavelService.criar(dados);
         setResponsavelEditando(null);
         await carregarResponsaveis();
-        abrirModalSucesso('Responsável cadastrado com sucesso.', 'responsaveis');
+        if (acolhidoRascunho) {
+          // Veio do formulário de acolhido: volta para lá preservando os dados
+          // e já selecionando o responsável recém-criado.
+          setAcolhidoRascunho((r) => ({
+            ...r,
+            form: { ...r.form, responsavelId: String(criado.id) },
+          }));
+          setPagina(
+            acolhidoRascunho.modoHistorico
+              ? 'cadastro-historico'
+              : 'cadastro-acolhido'
+          );
+          mostrarMensagem(
+            'sucesso',
+            'Responsável cadastrado. Continue o cadastro do acolhido.'
+          );
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          abrirModalSucesso('Responsável cadastrado com sucesso.', 'responsaveis');
+        }
       }
     } catch (err) {
       mostrarMensagem('erro', extrairErroApi(err, 'Erro ao salvar responsável.'));
@@ -926,6 +1478,7 @@ export default function App() {
 
   const handleCancelarEdicaoResponsavel = () => {
     setResponsavelEditando(null);
+    setAcolhidoRascunho(null);
     setPagina('responsaveis');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -981,14 +1534,20 @@ export default function App() {
               ? ocorrenciaService
               : tipo === 'responsavel'
                 ? responsavelService
-                : combinadoService;
+                : tipo === 'consulta'
+                  ? consultaService
+                  : combinadoService;
 
     setExcluindoEmMassa(true);
     let sucesso = 0;
     let falhas = 0;
     for (const r of registros) {
       try {
-        await service.deletar(r.id);
+        if (tipo === 'pertence') {
+          await pertenceService.deletar(r.acolhidoId, r.id);
+        } else {
+          await service.deletar(r.id);
+        }
         sucesso += 1;
       } catch {
         falhas += 1;
@@ -1000,6 +1559,13 @@ export default function App() {
       await carregarHistorico();
       await carregarCombinados();
       await carregarOcorrencias();
+      // Excluir acolhidos devolve ao estoque livre o que estava reservado a
+      // eles; recarrega os medicamentos para refletir o estoque atualizado.
+      await carregarMedicamentos();
+      // Responsáveis vinculados podem ter sido excluídos junto.
+      await carregarResponsaveis();
+      // Pertences dos acolhidos foram excluídos junto; atualiza a lista geral.
+      await carregarPertencesGerais();
     } else if (tipo === 'medicamento') {
       await carregarMedicamentos();
     } else if (tipo === 'motivo') {
@@ -1008,6 +1574,10 @@ export default function App() {
       await carregarOcorrencias();
     } else if (tipo === 'responsavel') {
       await carregarResponsaveis();
+    } else if (tipo === 'consulta') {
+      await carregarConsultas();
+    } else if (tipo === 'pertence') {
+      await carregarPertencesGerais();
     } else {
       await carregarCombinados();
     }
@@ -1028,6 +1598,10 @@ export default function App() {
   };
 
   const handleAutenticado = (u) => {
+    alertaEstoqueExibidoRef.current = false;
+    setAlertaEstoqueMedicamentos(null);
+    alertaConsultasExibidoRef.current = false;
+    setAlertaConsultas(null);
     setUsuario(u);
     setPagina('inicio');
   };
@@ -1038,6 +1612,10 @@ export default function App() {
     } catch {
       // ignora erros de logout; limpa o estado local de qualquer forma
     }
+    alertaEstoqueExibidoRef.current = false;
+    setAlertaEstoqueMedicamentos(null);
+    alertaConsultasExibidoRef.current = false;
+    setAlertaConsultas(null);
     setUsuario(null);
     setPagina('inicio');
     setAcolhidos([]);
@@ -1045,6 +1623,7 @@ export default function App() {
     setMotivosAdesao([]);
     setMotivosDesistencia([]);
     setCombinados([]);
+    setConsultas([]);
     setOcorrencias([]);
     setResponsaveis([]);
   };
@@ -1058,12 +1637,19 @@ export default function App() {
   const mostrarListaMedicamentos = pagina === 'medicamentos';
   const mostrarFormCombinado = pagina === 'cadastro-combinado';
   const mostrarListaCombinados = pagina === 'combinados';
+  const mostrarFormConsulta = pagina === 'cadastro-consulta';
+  const mostrarListaConsultas = pagina === 'consultas';
   const mostrarFormOcorrencia = pagina === 'cadastro-ocorrencia';
   const mostrarListaOcorrencias = pagina === 'ocorrencias';
+  const mostrarFormPertence = pagina === 'cadastro-pertence';
+  const mostrarListaPertences = pagina === 'pertences';
   const mostrarFormResponsavel = pagina === 'cadastro-responsavel';
   const mostrarListaResponsaveis = pagina === 'responsaveis';
   const mostrarRelatorios = pagina === 'relatorios';
+  const mostrarDocumentos = pagina === 'documentos';
+  const mostrarConfiguracoes = pagina === 'configuracoes';
   const mostrarControleMedicamentos = pagina === 'controle-medicamentos';
+  const mostrarGestaoMedicacao = pagina === 'gestao-medicacao';
   const mostrarListaMotivosAdesao = pagina === 'motivos-adesao';
   const mostrarFormMotivoAdesao = pagina === 'cadastro-motivo-adesao';
   const mostrarListaMotivosDesistencia = pagina === 'motivos-desistencia';
@@ -1136,6 +1722,18 @@ export default function App() {
       ),
     },
     {
+      id: 'consultas',
+      titulo: 'Consultas',
+      descricao: 'Agende e acompanhe as consultas dos acolhidos.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2" />
+          <path d="M16 2v4M8 2v4M3 10h18" />
+          <circle cx="12" cy="16" r="2" />
+        </svg>
+      ),
+    },
+    {
       id: 'ocorrencias',
       titulo: 'Ocorrências',
       descricao: 'Registre e acompanhe ocorrências dos acolhidos.',
@@ -1185,6 +1783,20 @@ export default function App() {
         </svg>
       ),
     },
+    {
+      id: 'documentos',
+      titulo: 'Documentos',
+      descricao: 'Modelos dos termos em branco para gerar em ODF ou PDF.',
+      icone: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <line x1="10" y1="9" x2="8" y2="9" />
+        </svg>
+      ),
+    },
   ];
 
   if (verificandoAuth) {
@@ -1206,6 +1818,8 @@ export default function App() {
         onNavegar={handleNavegar}
         usuario={usuario}
         onLogout={handleLogout}
+        ehAdmin={ehAdmin}
+        permissaoId={permissaoId}
       />
 
       <main className="container conteudo">
@@ -1246,64 +1860,20 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="descricao-ilustracao" aria-hidden="true">
-                <svg viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="#eff6ff" />
-                      <stop offset="100%" stopColor="#bfdbfe" />
-                    </linearGradient>
-                    <linearGradient id="heartGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#60a5fa" />
-                      <stop offset="100%" stopColor="#1d4ed8" />
-                    </linearGradient>
-                  </defs>
-
-                  <rect width="320" height="240" rx="20" fill="url(#bgGrad)" />
-
-                  <circle cx="40" cy="40" r="5" fill="white" opacity="0.7" />
-                  <circle cx="280" cy="55" r="4" fill="white" opacity="0.65" />
-                  <circle cx="60" cy="180" r="6" fill="white" opacity="0.7" />
-                  <circle cx="275" cy="190" r="5" fill="white" opacity="0.6" />
-                  <circle cx="290" cy="120" r="3" fill="white" opacity="0.75" />
-                  <circle cx="35" cy="115" r="3" fill="white" opacity="0.75" />
-
-                  <path
-                    d="M 290 30 l 3 6 l 6 3 l -6 3 l -3 6 l -3 -6 l -6 -3 l 6 -3 z"
-                    fill="white"
-                    opacity="0.85"
-                  />
-                  <path
-                    d="M 28 200 l 2.5 5 l 5 2.5 l -5 2.5 l -2.5 5 l -2.5 -5 l -5 -2.5 l 5 -2.5 z"
-                    fill="white"
-                    opacity="0.75"
-                  />
-
-                  <g transform="translate(160 132)">
-                    <path
-                      d="M 0 32 C -52 0 -78 -30 -52 -56 C -32 -72 -12 -56 0 -40 C 12 -56 32 -72 52 -56 C 78 -30 52 0 0 32 Z"
-                      fill="url(#heartGrad)"
-                    />
-                    <rect x="-6" y="-50" width="12" height="36" rx="2.5" fill="white" />
-                    <rect x="-18" y="-38" width="36" height="12" rx="2.5" fill="white" />
-                  </g>
-
-                  <path
-                    d="M 100 205 Q 160 222, 220 205"
-                    stroke="white"
-                    strokeWidth="3"
-                    fill="none"
-                    strokeLinecap="round"
-                    opacity="0.7"
-                  />
-                </svg>
-              </div>
+            <div className="descricao-ilustracao" aria-hidden="true">
+              <LogoBetesda className="descricao-logo-img" />
+            </div>
             </div>
 
             <div className="inicio-atalhos">
               <h3 className="inicio-atalhos-titulo">O que você pode fazer</h3>
               <div className="inicio-atalhos-grade">
-                {atalhosInicio.map((item) => (
+                {(ehAdmin
+                  ? atalhosInicio
+                  : atalhosInicio.filter((item) =>
+                      paginasPermitidasNaoAdmin(permissaoId).includes(item.id)
+                    )
+                ).map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -1348,6 +1918,13 @@ export default function App() {
             onSalvar={handleSalvarAcolhido}
             onCancelar={handleCancelarEdicaoAcolhido}
             onVerLista={() => handleNavegar('acolhidos')}
+            onNavegar={handleNavegar}
+            onCadastrarResponsavel={handleCadastrarResponsavelDeAcolhido}
+            onCriarMedicamento={handleCriarMedicamentoInline}
+            rascunhoInicial={acolhidoRascunho}
+            onErro={(msg) => mostrarMensagem('erro', msg)}
+            onMensagem={(tipo, msg) => mostrarMensagem(tipo, msg)}
+            onPertencesAlterados={carregarPertencesGerais}
             salvando={salvandoAcolhido}
           />
         )}
@@ -1386,6 +1963,13 @@ export default function App() {
             onSalvar={handleSalvarHistorico}
             onCancelar={() => handleNavegar('historico')}
             onVerLista={() => handleNavegar('historico')}
+            onNavegar={handleNavegar}
+            onCadastrarResponsavel={handleCadastrarResponsavelDeAcolhido}
+            onCriarMedicamento={handleCriarMedicamentoInline}
+            rascunhoInicial={acolhidoRascunho}
+            onErro={(msg) => mostrarMensagem('erro', msg)}
+            onMensagem={(tipo, msg) => mostrarMensagem(tipo, msg)}
+            onPertencesAlterados={carregarPertencesGerais}
             salvando={salvandoAcolhido}
           />
         )}
@@ -1403,6 +1987,7 @@ export default function App() {
             onRestaurar={handleRestaurar}
             onRestaurarSelecionados={handleRestaurar}
             onAnexos={handleAnexosAcolhido}
+            onAssinaturas={handleAssinaturasAcolhido}
             onNovo={() => handleNavegar('cadastro-historico')}
           />
         )}
@@ -1410,6 +1995,7 @@ export default function App() {
         {mostrarFormMedicamento && (
           <MedicamentoForm
             medicamentoEditando={medicamentoEditando}
+            acolhidos={acolhidos}
             onSalvar={handleSalvarMedicamento}
             onCancelar={handleCancelarEdicaoMedicamento}
             onVerLista={() => handleNavegar('medicamentos')}
@@ -1420,12 +2006,15 @@ export default function App() {
         {mostrarListaMedicamentos && (
           <MedicamentoList
             medicamentos={medicamentos}
+            acolhidos={acolhidos}
             carregando={carregandoMedicamentos}
             onEditar={handleEditarMedicamento}
             onExcluir={handleExcluirMedicamento}
             onExcluirSelecionados={(registros) =>
               handleExcluirSelecionados('medicamento', registros)
             }
+            onSalvarCampos={handleAtualizarCamposMedicamento}
+            onSalvarEstoqueReservado={handleAtualizarEstoqueReservado}
             onNovo={() => handleNavegar('cadastro-medicamento')}
           />
         )}
@@ -1452,6 +2041,58 @@ export default function App() {
               handleExcluirSelecionados('combinado', registros)
             }
             onNovo={() => handleNavegar('cadastro-combinado')}
+          />
+        )}
+
+        {mostrarFormConsulta && (
+          <ConsultaForm
+            consultaEditando={consultaEditando}
+            acolhidosDisponiveis={acolhidos}
+            onSalvar={handleSalvarConsulta}
+            onCancelar={handleCancelarEdicaoConsulta}
+            onVerLista={() => handleNavegar('consultas')}
+            salvando={salvandoConsulta}
+          />
+        )}
+
+        {mostrarListaConsultas && (
+          <ConsultaList
+            consultas={consultas}
+            carregando={carregandoConsultas}
+            onExibir={handleExibirConsulta}
+            onEditar={handleEditarConsulta}
+            onConcluir={handleConcluirConsulta}
+            onExcluir={handleExcluirConsulta}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('consulta', registros)
+            }
+            onNovo={() => handleNavegar('cadastro-consulta')}
+          />
+        )}
+
+        {mostrarFormPertence && (
+          <PertenceForm
+            pertenceEditando={pertenceEditando}
+            acolhidosDisponiveis={acolhidos}
+            onSalvar={handleSalvarPertence}
+            onCancelar={handleCancelarEdicaoPertence}
+            onVerLista={() => handleNavegar('pertences')}
+            onMensagem={(tipo, msg) => mostrarMensagem(tipo, msg)}
+            salvando={salvandoPertence}
+          />
+        )}
+
+        {mostrarListaPertences && (
+          <PertenceList
+            pertences={pertencesGerais}
+            carregando={carregandoPertencesGerais}
+            onExibir={handleExibirPertence}
+            onEditar={handleEditarPertence}
+            onExcluir={handleExcluirPertence}
+            onExcluirSelecionados={(registros) =>
+              handleExcluirSelecionados('pertence', registros)
+            }
+            onNovo={() => handleNavegar('cadastro-pertence')}
           />
         )}
 
@@ -1486,6 +2127,9 @@ export default function App() {
             onSalvar={handleSalvarResponsavel}
             onCancelar={handleCancelarEdicaoResponsavel}
             onVerLista={() => handleNavegar('responsaveis')}
+            onVoltarParaAcolhido={
+              acolhidoRascunho ? handleVoltarParaAcolhidoDoResponsavel : null
+            }
             salvando={salvandoResponsavel}
           />
         )}
@@ -1507,18 +2151,56 @@ export default function App() {
         {mostrarRelatorios && (
           <Relatorios
             acolhidos={acolhidosParaRelatorios}
+            consultas={consultas}
+            podeConsultas={podeConsultas}
             carregando={carregandoAcolhidos || carregandoHistorico}
             onErro={(msg) => mostrarMensagem('erro', msg)}
+          />
+        )}
+
+        {mostrarDocumentos && (
+          <Documentos
+            acolhidos={acolhidosParaRelatorios}
+            responsaveis={responsaveis}
+            onErro={(msg) => mostrarMensagem('erro', msg)}
+          />
+        )}
+
+        {mostrarConfiguracoes && (
+          <ConfiguracoesUsuario
+            onErro={(msg) => mostrarMensagem('erro', msg)}
+            onSucesso={(msg) => mostrarMensagem('sucesso', msg)}
+            onPerfilAtualizado={(perfil) =>
+              setUsuario((atual) => ({
+                ...atual,
+                username: perfil.username,
+                nome: perfil.nome,
+              }))
+            }
           />
         )}
 
         {mostrarControleMedicamentos && (
           <ControleMedicamentos
             acolhidos={acolhidos}
+            medicamentos={medicamentos}
             carregando={carregandoAcolhidos}
             onErro={(msg) => mostrarMensagem('erro', msg)}
             onSucesso={(msg) => mostrarMensagem('sucesso', msg)}
             onRecarregarAcolhidos={carregarAcolhidos}
+            onRecarregarMedicamentos={carregarMedicamentos}
+          />
+        )}
+
+        {mostrarGestaoMedicacao && (
+          <GestaoMedicacao
+            acolhidos={acolhidos}
+            medicamentos={medicamentos}
+            carregando={carregandoAcolhidos || carregandoMedicamentos}
+            onErro={(msg) => mostrarMensagem('erro', msg)}
+            onSucesso={(msg) => mostrarMensagem('sucesso', msg)}
+            onRecarregarAcolhidos={carregarAcolhidos}
+            onRecarregarMedicamentos={carregarMedicamentos}
           />
         )}
 
@@ -1599,6 +2281,18 @@ export default function App() {
         onFechar={handleFecharDetalhesCombinado}
       />
 
+      <DetalhesConsultaModal
+        consulta={consultaSelecionada}
+        onFechar={handleFecharDetalhesConsulta}
+      />
+
+      <ConcluirConsultaModal
+        consulta={consultaParaConcluir}
+        salvando={concluindoConsulta}
+        onConfirmar={confirmarConclusaoConsulta}
+        onFechar={cancelarConclusaoConsulta}
+      />
+
       <DetalhesOcorrenciaModal
         ocorrencia={ocorrenciaSelecionada}
         onFechar={handleFecharDetalhesOcorrencia}
@@ -1612,6 +2306,14 @@ export default function App() {
       <GerenciarAnexosModal
         acolhido={acolhidoAnexos}
         onFechar={handleFecharAnexosAcolhido}
+        onMensagem={(tipo, msg) => mostrarMensagem(tipo, msg)}
+      />
+
+      <AssinaturasModal
+        acolhido={acolhidoAssinaturas}
+        onFechar={handleFecharAssinaturas}
+        onSalvo={handleAssinaturasSalvas}
+        onErro={(msg) => mostrarMensagem('erro', msg)}
       />
 
       <ModalConfirmacao
@@ -1619,7 +2321,7 @@ export default function App() {
         titulo="Excluir acolhido"
         mensagem={
           acolhidoParaExcluir
-            ? `Deseja realmente excluir o acolhido "${acolhidoParaExcluir.nome}"? Esta ação não pode ser desfeita.`
+            ? `Deseja realmente excluir o acolhido "${acolhidoParaExcluir.nome}"? O responsável vinculado também será excluído (caso não esteja ligado a outro acolhido). Esta ação não pode ser desfeita.`
             : ''
         }
         textoConfirmar={excluindoAcolhido ? 'Excluindo...' : 'Excluir'}
@@ -1707,6 +2409,41 @@ export default function App() {
       />
 
       <ModalConfirmacao
+        aberto={Boolean(consultaParaExcluir)}
+        titulo="Excluir consulta"
+        mensagem={
+          consultaParaExcluir
+            ? `Deseja realmente excluir esta consulta de "${consultaParaExcluir.acolhidoNome ?? 'acolhido'}"? Esta ação não pode ser desfeita.`
+            : ''
+        }
+        textoConfirmar={excluindoConsulta ? 'Excluindo...' : 'Excluir'}
+        textoCancelar="Cancelar"
+        perigo
+        onConfirmar={confirmarExclusaoConsulta}
+        onCancelar={cancelarExclusaoConsulta}
+      />
+
+      <DetalhesPertenceModal
+        pertence={pertenceSelecionado}
+        onFechar={handleFecharDetalhesPertence}
+      />
+
+      <ModalConfirmacao
+        aberto={Boolean(pertenceParaExcluir)}
+        titulo="Excluir pertence"
+        mensagem={
+          pertenceParaExcluir
+            ? `Deseja realmente excluir o pertence "${pertenceParaExcluir.item ?? ''}" de "${pertenceParaExcluir.acolhidoNome ?? 'acolhido'}"? As fotos também serão removidas. Esta ação não pode ser desfeita.`
+            : ''
+        }
+        textoConfirmar={excluindoPertence ? 'Excluindo...' : 'Excluir'}
+        textoCancelar="Cancelar"
+        perigo
+        onConfirmar={confirmarExclusaoPertence}
+        onCancelar={cancelarExclusaoPertence}
+      />
+
+      <ModalConfirmacao
         aberto={Boolean(ocorrenciaParaExcluir)}
         titulo="Excluir ocorrência"
         mensagem={
@@ -1762,6 +2499,26 @@ export default function App() {
         mensagem={modal?.texto ?? ''}
         duracao={modal?.tipo === 'erro' ? 7000 : 4000}
         onFechar={fecharModal}
+      />
+
+      <ModalAlertaConsultas
+        aberto={Boolean(alertaConsultas?.length)}
+        alertas={alertaConsultas ?? []}
+        onFechar={() => setAlertaConsultas(null)}
+        onVerConsultas={() => {
+          setAlertaConsultas(null);
+          handleNavegar('consultas');
+        }}
+      />
+
+      <ModalAlertaEstoque
+        aberto={Boolean(alertaEstoqueMedicamentos?.length)}
+        alertas={alertaEstoqueMedicamentos ?? []}
+        onFechar={() => setAlertaEstoqueMedicamentos(null)}
+        onVerAcolhidos={() => {
+          setAlertaEstoqueMedicamentos(null);
+          handleNavegar('acolhidos');
+        }}
       />
     </div>
   );

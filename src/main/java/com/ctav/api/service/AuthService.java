@@ -37,7 +37,7 @@ public class AuthService {
         return BCrypt.hashpw(senha, BCrypt.gensalt(12));
     }
 
-    private boolean verificarSenha(String senha, String hash) {
+    public boolean verificarSenha(String senha, String hash) {
         if (hash == null || hash.isBlank()) {
             return false;
         }

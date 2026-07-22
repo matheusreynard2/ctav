@@ -83,13 +83,33 @@ export default function DetalhesResponsavelModal({ responsavel, onFechar }) {
           </section>
 
           <section className="detalhes-secao">
-            <h4 className="detalhes-secao-titulo">Vínculos</h4>
-            <div className="detalhes-grid">
-              <Campo
-                label="Acolhidos vinculados"
-                valor={responsavel.qtdAcolhidos ?? 0}
+            <h4 className="detalhes-secao-titulo">Assinatura</h4>
+            {responsavel.assinatura ? (
+              <img
+                className="assinatura-imagem"
+                src={responsavel.assinatura}
+                alt="Assinatura do responsável"
               />
-            </div>
+            ) : (
+              <p className="detalhes-vazio">Nenhuma assinatura registrada.</p>
+            )}
+          </section>
+
+          <section className="detalhes-secao">
+            <h4 className="detalhes-secao-titulo">
+              Acolhidos vinculados ({responsavel.acolhidos?.length ?? responsavel.qtdAcolhidos ?? 0})
+            </h4>
+            {responsavel.acolhidos && responsavel.acolhidos.length > 0 ? (
+              <ul className="detalhes-lista-nomes">
+                {responsavel.acolhidos.map((nome, i) => (
+                  <li key={`${nome}-${i}`}>{nome}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="detalhes-vazio">
+                Nenhum acolhido vinculado a este responsável.
+              </p>
+            )}
           </section>
 
           <section className="detalhes-secao detalhes-auditoria">

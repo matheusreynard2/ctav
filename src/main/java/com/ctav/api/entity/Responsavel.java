@@ -79,6 +79,12 @@ public class Responsavel {
     @Builder.Default
     private Boolean conveniado = false;
 
+    // Assinatura do responsavel (imagem PNG em data URL base64). Cadastrada e
+    // editada na tela do responsavel e reutilizada no termo dos acolhidos
+    // vinculados. Null quando ainda nao ha assinatura.
+    @Column(name = "assinatura", columnDefinition = "text")
+    private String assinatura;
+
     @Column(name = "criado_em", updatable = false)
     private LocalDateTime criadoEm;
 

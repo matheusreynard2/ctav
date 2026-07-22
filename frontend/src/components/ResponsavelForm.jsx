@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import AssinaturaPad from './AssinaturaPad.jsx';
 import { maskCelular, maskCep, maskCpf } from '../utils/masks';
 
 const UFS = [
@@ -25,10 +26,19 @@ export default function ResponsavelForm({
   onSalvar,
   onCancelar,
   onVerLista,
+  onVoltarParaAcolhido,
   salvando,
 }) {
   const [form, setForm] = useState(FORM_INICIAL);
   const [erros, setErros] = useState({});
+  const [assinou, setAssinou] = useState(false);
+  const [assinaturaInicial, setAssinaturaInicial] = useState(null);
+  const canvasAssinaturaRef = useRef(null);
+
+  useEffect(() => {
+    setAssinou(Boolean(responsavelEditando?.assinatura));
+    setAssinaturaInicial(responsavelEditando?.assinatura ?? null);
+  }, [responsavelEditando]);
 
   useEffect(() => {
     if (responsavelEditando) {
@@ -104,6 +114,11 @@ export default function ResponsavelForm({
       cep: form.cep.trim() || null,
       celular: form.celular.trim() || null,
       conveniado: form.conveniado,
+      // Envia a assinatura desenhada; "" (vazia) quando não há, para permitir
+      // remover a assinatura existente na edição.
+      assinatura: assinou
+        ? canvasAssinaturaRef.current?.toDataURL('image/png') ?? ''
+        : '',
     });
   };
 
@@ -114,6 +129,20 @@ export default function ResponsavelForm({
       <div className="form-cabecalho">
         <h2>{editando ? 'Editar responsável' : 'Novo responsável'}</h2>
         <div className="form-cabecalho-acoes">
+          {onVoltarParaAcolhido && (
+            <button
+              type="button"
+              className="btn btn-secundario btn-novo"
+              onClick={onVoltarParaAcolhido}
+              title="Voltar ao cadastro do acolhido"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+              Voltar ao acolhido
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-secundario btn-novo"
@@ -269,6 +298,46 @@ export default function ResponsavelForm({
             Marque se o responsável é conveniado.
           </span>
         </div>
+
+        <div className="campo campo-largo">
+          <label>Assinatura do responsável</label>
+          <span className="campo-ajuda">
+            Desenhe a assinatura abaixo. Ela é reutilizada no termo de
+            concordância dos acolhidos vinculados. Use &quot;Limpar&quot; para
+            removê-la.
+          </span>
+          <AssinaturaPad
+            id="responsavel-assinatura"
+            canvasRef={canvasAssinaturaRef}
+            onMudar={setAssinou}
+            disabled={salvando}
+            valorInicial={assinaturaInicial}
+          />
+        </div>
+
+        {editando && (
+          <div className="campo campo-largo">
+            <label>
+              Acolhidos vinculados (
+              {responsavelEditando.acolhidos?.length ??
+                responsavelEditando.qtdAcolhidos ??
+                0}
+              )
+            </label>
+            {responsavelEditando.acolhidos &&
+            responsavelEditando.acolhidos.length > 0 ? (
+              <ul className="detalhes-lista-nomes">
+                {responsavelEditando.acolhidos.map((nome, i) => (
+                  <li key={`${nome}-${i}`}>{nome}</li>
+                ))}
+              </ul>
+            ) : (
+              <span className="campo-ajuda">
+                Nenhum acolhido vinculado a este responsável.
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="acoes">

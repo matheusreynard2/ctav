@@ -46,11 +46,19 @@ public class Medicamento {
     @Column(nullable = false, length = 255)
     private String descricao;
 
+    // Quantidade de caixas CHEIAS em estoque. Derivada de total_comprimidos /
+    // quantidade_por_caixa; mantida para exibicao e compatibilidade.
     @Column(nullable = false)
     private Integer quantidade_caixas;
 
+    // Comprimidos por caixa (tamanho da embalagem).
     @Column(nullable = false)
     private Integer quantidade_por_caixa;
+
+    // Total real de comprimidos em estoque. Fonte de verdade do estoque:
+    // usado nos alertas e ajustado a cada administracao registrada.
+    @Column(name = "total_comprimidos")
+    private Integer total_comprimidos;
 
     @Column(name = "criado_em", updatable = false)
     private LocalDateTime criadoEm;
